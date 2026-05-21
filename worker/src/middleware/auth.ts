@@ -4,9 +4,9 @@ import type { AppVariables, Env, Role } from '../types/env';
 import { fail } from '../lib/response';
 import { getBearerToken, verifySession } from '../lib/auth';
 
-const rank: Record<Role, number> = {
+export const rank: Record<Role, number> = {
   student: 1,
-  moderator: 2,
+  student_council: 2,
   dept_admin: 3,
   super_admin: 4
 };
@@ -31,6 +31,12 @@ export function requireRole(role: Role) {
   });
 }
 
+/** dept_admin and above — can change issue status, delete comments, assign */
 export function isAdmin(role: Role) {
-  return rank[role] >= rank.moderator;
+  return rank[role] >= rank.dept_admin;
+}
+
+/** student_council and above — can validate, add council notes, mark solutions */
+export function isCouncilOrAdmin(role: Role) {
+  return rank[role] >= rank.student_council;
 }

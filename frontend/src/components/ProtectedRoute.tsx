@@ -1,8 +1,8 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { canAccessAdmin, useAuth } from '../lib/auth';
+import { canAccessAdmin, canAccessCouncil, useAuth } from '../lib/auth';
 
-export function ProtectedRoute({ admin = false }: { admin?: boolean }) {
+export function ProtectedRoute({ admin = false, council = false }: { admin?: boolean; council?: boolean }) {
   const { isAuthed, isLoading, user } = useAuth();
 
   if (isLoading) {
@@ -15,5 +15,6 @@ export function ProtectedRoute({ admin = false }: { admin?: boolean }) {
 
   if (!isAuthed) return <Navigate to="/login" replace />;
   if (admin && !canAccessAdmin(user?.role)) return <Navigate to="/" replace />;
+  if (council && !canAccessCouncil(user?.role)) return <Navigate to="/" replace />;
   return <Outlet />;
 }

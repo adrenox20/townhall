@@ -1,10 +1,23 @@
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { MessageSquare, ThumbsUp } from 'lucide-react';
-import { Badge, priorityClass, statusClass, statusLabels } from '../lib/badges';
+import { Badge, priorityClass, publicStatusClass, publicStatusLabels, statusClass, statusLabels } from '../lib/badges';
 import type { Issue } from '../lib/types';
 
-export function IssueCard({ issue }: { issue: Issue }) {
+interface IssueCardProps {
+  issue: Issue;
+  /** Show real internal statuses (council/admin views). Default: false = student-safe labels */
+  councilView?: boolean;
+}
+
+export function IssueCard({ issue, councilView = false }: IssueCardProps) {
+  const label = councilView
+    ? (statusLabels[issue.status] ?? issue.status)
+    : (publicStatusLabels[issue.status] ?? issue.status);
+  const badgeClass = councilView
+    ? (statusClass[issue.status] ?? statusClass.submitted)
+    : (publicStatusClass[issue.status] ?? publicStatusClass.submitted);
+
   return (
     <Link
       to={`/issues/${issue.id}`}
@@ -13,11 +26,14 @@ export function IssueCard({ issue }: { issue: Issue }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="mb-2.5 flex flex-wrap items-center gap-2">
-            <Badge className={statusClass[issue.status]}>{statusLabels[issue.status] ?? issue.status}</Badge>
+            <Badge className={badgeClass}>{label}</Badge>
             <Badge className={priorityClass[issue.priority]}>{issue.priority}</Badge>
             {issue.category_name && (
               <Badge className="bg-indigo-500/15 text-indigo-300 border-indigo-500/25">{issue.category_name}</Badge>
             )}
+            {issue.is_overdue ? (
+              <Badge className="bg-red-500/20 text-red-300 border-red-500/30">⚠ Overdue</Badge>
+            ) : null}
           </div>
           <h3 className="line-clamp-2 text-base font-semibold text-white group-hover:text-indigo-200 transition-colors">
             {issue.title}
@@ -31,6 +47,9 @@ export function IssueCard({ issue }: { issue: Issue }) {
               {issue.author_name ?? 'Anonymous'}
             </span>
             <span>{formatDistanceToNow(new Date(issue.created_at), { addSuffix: true })}</span>
+            {issue.solution_count ? (
+              <span className="text-amber-400">💡 {issue.solution_count}</span>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-col gap-2 shrink-0">

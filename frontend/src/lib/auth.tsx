@@ -17,5 +17,9 @@ export function useAuth() {
 }
 
 export function canAccessAdmin(role?: string) {
-  return role === 'moderator' || role === 'dept_admin' || role === 'super_admin';
+  return role === 'dept_admin' || role === 'super_admin';
+}
+
+export function canAccessCouncil(role?: string) {
+  return role === 'student_council' || role === 'dept_admin' || role === 'super_admin';
 }

@@ -15,7 +15,7 @@ tagRoutes.get('/', async (c) => {
   return ok(c, tags.results);
 });
 
-tagRoutes.post('/', requireAuth, requireRole('moderator'), zValidator('json', z.object({ name: z.string().min(2), color: z.string().optional() })), async (c) => {
+tagRoutes.post('/', requireAuth, requireRole('dept_admin'), zValidator('json', z.object({ name: z.string().min(2), color: z.string().optional() })), async (c) => {
   const { name, color } = c.req.valid('json');
   const tagId = id('tag');
   await c.env.DB.prepare('INSERT INTO tags (id, name, slug, color) VALUES (?, ?, ?, ?)').bind(tagId, name, slugify(name), color ?? null).run();

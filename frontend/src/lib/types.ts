@@ -1,4 +1,4 @@
-export type Role = 'student' | 'moderator' | 'dept_admin' | 'super_admin';
+export type Role = 'student' | 'student_council' | 'dept_admin' | 'super_admin';
 
 export type User = {
   id: string;
@@ -7,6 +7,7 @@ export type User = {
   avatar_url?: string | null;
   role: Role;
   department?: string | null;
+  council_department?: string | null;
 };
 
 export type Category = {
@@ -45,10 +46,19 @@ export type Issue = {
   view_count: number;
   is_pinned: number;
   is_locked: number;
+  is_duplicate_of?: string | null;
+  council_note?: string | null;
+  council_reviewer_id?: string | null;
+  council_reviewed_at?: string | null;
+  appeal_allowed?: number;
+  solution_count?: number;
+  priority_suggestion?: string | null;
+  affected_audience?: string | null;
   created_at: string;
   updated_at: string;
   resolved_at?: string | null;
   comment_count?: number;
+  is_overdue?: number;
 };
 
 export type Comment = {
@@ -72,4 +82,33 @@ export type HistoryEntry = {
   note?: string | null;
   changed_by_name?: string | null;
   created_at: string;
+};
+
+export type Solution = {
+  id: string;
+  issue_id: string;
+  author_id: string;
+  title: string;
+  description: string;
+  effort?: 'quick_fix' | 'medium' | 'large_project' | null;
+  cost_estimate?: string | null;
+  status: 'proposed' | 'council_recommended' | 'being_implemented' | 'implemented' | 'rejected';
+  council_note?: string | null;
+  admin_note?: string | null;
+  upvotes: number;
+  downvotes: number;
+  author_name?: string | null;
+  author_avatar?: string | null;
+  created_at: string;
+};
+
+export type Appeal = {
+  id: string;
+  issue_id: string;
+  author_id: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'denied';
+  council_response?: string | null;
+  created_at: string;
+  resolved_at?: string | null;
 };

@@ -2,17 +2,19 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Bell, LayoutDashboard, LogIn, Plus, Shield, Menu, X,
   Home, FileText, Users, Megaphone, FolderKanban, Tag, LogOut, Zap,
-  ChevronLeft, ChevronRight, PlusCircle, Kanban
+  ChevronLeft, ChevronRight, PlusCircle, Kanban, GraduationCap,
+  ClipboardList, BarChart3, Lightbulb
 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { clearToken } from '../lib/api';
-import { canAccessAdmin, useAuth } from '../lib/auth';
+import { canAccessAdmin, canAccessCouncil, useAuth } from '../lib/auth';
 import { useState } from 'react';
 
 export function Layout() {
   const { user, isAuthed } = useAuth();
   const navigate = useNavigate();
   const isAdmin = canAccessAdmin(user?.role);
+  const isCouncil = canAccessCouncil(user?.role);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -22,7 +24,6 @@ export function Layout() {
     window.location.reload();
   }
 
-  // Public layout (not logged in) — just a top navbar
   if (!isAuthed) {
     return (
       <div className="min-h-screen bg-[#0f1117] text-slate-100">
@@ -34,8 +35,8 @@ export function Layout() {
             <span className="text-lg font-bold text-white font-display">Campus Issues</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
-            <NavLink to="/" end className={({isActive}) => `text-sm font-medium transition-colors ${isActive ? 'text-white' : 'text-slate-400 hover:text-white'}`}>Feed</NavLink>
-            <NavLink to="/pipeline" className={({isActive}) => `text-sm font-medium transition-colors ${isActive ? 'text-white' : 'text-slate-400 hover:text-white'}`}>Pipeline</NavLink>
+            <NavLink to="/" end className={({ isActive }) => `text-sm font-medium transition-colors ${isActive ? 'text-white' : 'text-slate-400 hover:text-white'}`}>Feed</NavLink>
+            <NavLink to="/pipeline" className={({ isActive }) => `text-sm font-medium transition-colors ${isActive ? 'text-white' : 'text-slate-400 hover:text-white'}`}>Pipeline</NavLink>
           </nav>
           <Link to="/login" className="btn-primary text-xs px-4 py-2">
             <LogIn size={14} /> Sign In
@@ -49,12 +50,10 @@ export function Layout() {
     );
   }
 
-  // Authenticated layout — sidebar + header
   return (
     <div className="min-h-screen bg-[#0f1117] text-slate-100 flex">
       {/* Desktop Sidebar */}
       <aside className={`hidden lg:flex flex-col fixed left-0 top-0 h-screen z-30 bg-[#12141f] border-r border-white/[0.06] transition-all duration-300 ${collapsed ? 'w-[72px]' : 'w-[250px]'}`}>
-        {/* Logo */}
         <div className="flex items-center gap-3 px-5 h-16 border-b border-white/[0.06] shrink-0">
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
@@ -64,34 +63,37 @@ export function Layout() {
           </Link>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          <NavSection collapsed={collapsed}>
-            <SideLink to="/" icon={<Home size={18} />} label="Feed" collapsed={collapsed} end />
-            <SideLink to="/pipeline" icon={<Kanban size={18} />} label="Pipeline" collapsed={collapsed} />
-            <SideLink to="/dashboard" icon={<LayoutDashboard size={18} />} label="My Dashboard" collapsed={collapsed} />
-            <SideLink to="/issues/new" icon={<PlusCircle size={18} />} label="Submit Issue" collapsed={collapsed} />
-          </NavSection>
+          <SideLink to="/" icon={<Home size={18} />} label="Feed" collapsed={collapsed} end />
+          <SideLink to="/pipeline" icon={<Kanban size={18} />} label="Pipeline" collapsed={collapsed} />
+          <SideLink to="/dashboard" icon={<LayoutDashboard size={18} />} label="My Dashboard" collapsed={collapsed} />
+          <SideLink to="/issues/new" icon={<PlusCircle size={18} />} label="Submit Issue" collapsed={collapsed} />
+
+          {isCouncil && (
+            <>
+              <SectionDivider collapsed={collapsed} label="Student Council" />
+              <SideLink to="/council" icon={<GraduationCap size={18} />} label="SC Dashboard" collapsed={collapsed} end />
+              <SideLink to="/council/review" icon={<ClipboardList size={18} />} label="Review Queue" collapsed={collapsed} />
+              <SideLink to="/council/pipeline" icon={<FolderKanban size={18} />} label="SC Pipeline" collapsed={collapsed} />
+              <SideLink to="/council/solutions" icon={<Lightbulb size={18} />} label="Solutions" collapsed={collapsed} />
+              <SideLink to="/council/analytics" icon={<BarChart3 size={18} />} label="Analytics" collapsed={collapsed} />
+            </>
+          )}
 
           {isAdmin && (
             <>
-              <div className={`pt-4 pb-2 ${collapsed ? 'px-2' : 'px-3'}`}>
-                {!collapsed && <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</span>}
-                {collapsed && <div className="w-full h-px bg-white/[0.06]" />}
-              </div>
-              <NavSection collapsed={collapsed}>
-                <SideLink to="/admin" icon={<Shield size={18} />} label="Overview" collapsed={collapsed} end />
-                <SideLink to="/admin/pipeline" icon={<FolderKanban size={18} />} label="Pipeline" collapsed={collapsed} />
-                <SideLink to="/admin/issues" icon={<FileText size={18} />} label="All Issues" collapsed={collapsed} />
-                <SideLink to="/admin/users" icon={<Users size={18} />} label="Users" collapsed={collapsed} />
-                <SideLink to="/admin/categories" icon={<Tag size={18} />} label="Categories" collapsed={collapsed} />
-                <SideLink to="/admin/announcements" icon={<Megaphone size={18} />} label="Announcements" collapsed={collapsed} />
-              </NavSection>
+              <SectionDivider collapsed={collapsed} label="Admin" />
+              <SideLink to="/admin" icon={<Shield size={18} />} label="Overview" collapsed={collapsed} end />
+              <SideLink to="/admin/pipeline" icon={<FolderKanban size={18} />} label="Pipeline" collapsed={collapsed} />
+              <SideLink to="/admin/issues" icon={<FileText size={18} />} label="All Issues" collapsed={collapsed} />
+              <SideLink to="/admin/solutions" icon={<Lightbulb size={18} />} label="Solutions" collapsed={collapsed} />
+              <SideLink to="/admin/users" icon={<Users size={18} />} label="Users" collapsed={collapsed} />
+              <SideLink to="/admin/categories" icon={<Tag size={18} />} label="Categories" collapsed={collapsed} />
+              <SideLink to="/admin/announcements" icon={<Megaphone size={18} />} label="Announcements" collapsed={collapsed} />
             </>
           )}
         </nav>
 
-        {/* Collapse Button */}
         <div className="px-3 py-2 border-t border-white/[0.06]">
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -101,7 +103,6 @@ export function Layout() {
           </button>
         </div>
 
-        {/* User Section */}
         <div className="border-t border-white/[0.06] p-3 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs text-white font-semibold shrink-0">
@@ -143,14 +144,23 @@ export function Layout() {
               <SideLink to="/pipeline" icon={<Kanban size={18} />} label="Pipeline" onClick={() => setMobileMenuOpen(false)} />
               <SideLink to="/dashboard" icon={<LayoutDashboard size={18} />} label="My Dashboard" onClick={() => setMobileMenuOpen(false)} />
               <SideLink to="/issues/new" icon={<PlusCircle size={18} />} label="Submit Issue" onClick={() => setMobileMenuOpen(false)} />
+              {isCouncil && (
+                <>
+                  <SectionDivider label="Student Council" />
+                  <SideLink to="/council" icon={<GraduationCap size={18} />} label="SC Dashboard" onClick={() => setMobileMenuOpen(false)} end />
+                  <SideLink to="/council/review" icon={<ClipboardList size={18} />} label="Review Queue" onClick={() => setMobileMenuOpen(false)} />
+                  <SideLink to="/council/pipeline" icon={<FolderKanban size={18} />} label="SC Pipeline" onClick={() => setMobileMenuOpen(false)} />
+                  <SideLink to="/council/solutions" icon={<Lightbulb size={18} />} label="Solutions" onClick={() => setMobileMenuOpen(false)} />
+                  <SideLink to="/council/analytics" icon={<BarChart3 size={18} />} label="Analytics" onClick={() => setMobileMenuOpen(false)} />
+                </>
+              )}
               {isAdmin && (
                 <>
-                  <div className="pt-4 pb-2 px-3">
-                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Admin</span>
-                  </div>
+                  <SectionDivider label="Admin" />
                   <SideLink to="/admin" icon={<Shield size={18} />} label="Overview" onClick={() => setMobileMenuOpen(false)} end />
                   <SideLink to="/admin/pipeline" icon={<FolderKanban size={18} />} label="Pipeline" onClick={() => setMobileMenuOpen(false)} />
                   <SideLink to="/admin/issues" icon={<FileText size={18} />} label="All Issues" onClick={() => setMobileMenuOpen(false)} />
+                  <SideLink to="/admin/solutions" icon={<Lightbulb size={18} />} label="Solutions" onClick={() => setMobileMenuOpen(false)} />
                   <SideLink to="/admin/users" icon={<Users size={18} />} label="Users" onClick={() => setMobileMenuOpen(false)} />
                   <SideLink to="/admin/categories" icon={<Tag size={18} />} label="Categories" onClick={() => setMobileMenuOpen(false)} />
                   <SideLink to="/admin/announcements" icon={<Megaphone size={18} />} label="Announcements" onClick={() => setMobileMenuOpen(false)} />
@@ -174,9 +184,7 @@ export function Layout() {
         </div>
       )}
 
-      {/* Main Content Area */}
       <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${collapsed ? 'lg:ml-[72px]' : 'lg:ml-[250px]'}`}>
-        {/* Top Header Bar */}
         <header className="sticky top-0 z-20 h-14 flex items-center justify-between px-4 lg:px-6 bg-[#0f1117]/80 backdrop-blur-xl border-b border-white/[0.06] shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-white/[0.06] text-slate-400">
@@ -194,7 +202,6 @@ export function Layout() {
           </div>
         </header>
 
-        {/* Page Content */}
         <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">
           <div className="max-w-7xl mx-auto animate-fade-in">
             <Outlet />
@@ -207,10 +214,15 @@ export function Layout() {
   );
 }
 
-// ─── Helper Components ────────────────────────────────────────────────────────
-
-function NavSection({ children, collapsed }: { children: React.ReactNode; collapsed?: boolean }) {
-  return <div className="space-y-0.5">{children}</div>;
+function SectionDivider({ label, collapsed }: { label: string; collapsed?: boolean }) {
+  return (
+    <div className={`pt-4 pb-2 ${collapsed ? 'px-2' : 'px-3'}`}>
+      {!collapsed
+        ? <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">{label}</span>
+        : <div className="w-full h-px bg-white/[0.06]" />
+      }
+    </div>
+  );
 }
 
 function SideLink({ to, icon, label, collapsed, onClick, end }: {

@@ -1,4 +1,4 @@
-export type Role = 'student' | 'moderator' | 'dept_admin' | 'super_admin';
+export type Role = 'student' | 'student_council' | 'dept_admin' | 'super_admin';
 
 export type User = {
   id: string;
@@ -7,6 +7,7 @@ export type User = {
   avatar_url: string | null;
   role: Role;
   department: string | null;
+  council_department: string | null;
   is_verified: number;
   is_banned: number;
   created_at: string;
@@ -20,6 +21,9 @@ export type Env = {
   ALLOWED_EMAIL_DOMAIN: string;
   FRONTEND_URL: string;
   INITIAL_ADMIN_EMAIL?: string;
+  INITIAL_COUNCIL_EMAILS?: string;
+  COUNCIL_REVIEW_SLA_HOURS?: string;
+  SOLUTION_MAX_PER_ISSUE?: string;
   JWT_SECRET: string;
   RESEND_API_KEY?: string;
   GOOGLE_CLIENT_ID?: string;
