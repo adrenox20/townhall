@@ -1,0 +1,100 @@
+openapi: 3.1.0
+info:
+  title: University Grievance Portal API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+security:
+  - cookieSession: []
+  - bearerAuth: []
+components:
+  securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Envelope:
+      type: object
+      properties:
+        data: {}
+        meta:
+          type: object
+          properties:
+            requestId: { type: string }
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }
+paths:
+  /auth/magic-link:
+    post: { summary: Request magic link, responses: { '200': { description: OK } } }
+  /auth/verify:
+    get: { summary: Verify magic link, responses: { '200': { description: OK } } }
+  /auth/google:
+    post: { summary: Login with Google ID token, responses: { '200': { description: OK } } }
+  /auth/logout:
+    post: { summary: Logout, responses: { '200': { description: OK } } }
+  /auth/me:
+    get: { summary: Current session user, responses: { '200': { description: OK } } }
+  /issues:
+    get: { summary: Issue feed with search, filters, and pagination, responses: { '200': { description: OK } } }
+    post: { summary: Create issue, responses: { '201': { description: Created } } }
+  /issues/similar:
+    post: { summary: Deterministic duplicate suggestions, responses: { '200': { description: OK } } }
+  /issues/{id}:
+    get: { summary: Issue detail, responses: { '200': { description: OK } } }
+    patch: { summary: Edit issue, responses: { '200': { description: OK } } }
+    delete: { summary: Soft delete pending own issue, responses: { '200': { description: OK } } }
+  /issues/{id}/status:
+    patch: { summary: Transition issue workflow state, responses: { '200': { description: OK } } }
+  /issues/{id}/assign:
+    patch: { summary: Assign issue, responses: { '200': { description: OK } } }
+  /issues/{id}/merge:
+    post: { summary: Merge duplicate issue into canonical issue, responses: { '200': { description: OK } } }
+  /issues/{id}/link-related:
+    post: { summary: Link related issue, responses: { '200': { description: OK } } }
+  /issues/{id}/timeline:
+    get: { summary: Issue activity timeline, responses: { '200': { description: OK } } }
+  /issues/{id}/comments:
+    get: { summary: List comments, responses: { '200': { description: OK } } }
+    post: { summary: Create comment or internal note, responses: { '201': { description: Created } } }
+  /issues/{id}/solutions:
+    get: { summary: Ranked solutions, responses: { '200': { description: OK } } }
+    post: { summary: Propose solution, responses: { '201': { description: Created } } }
+  /issues/{id}/official-solution:
+    post: { summary: Select one official solution, responses: { '200': { description: OK } } }
+  /solutions/{id}/status:
+    patch: { summary: Review solution status, responses: { '200': { description: OK } } }
+  /admin/dashboard:
+    get: { summary: Institution operational metrics, responses: { '200': { description: OK } } }
+  /admin/kanban:
+    get: { summary: Workflow board data, responses: { '200': { description: OK } } }
+  /admin/analytics:
+    get: { summary: Institution analytics, responses: { '200': { description: OK } } }
+  /portal/dashboard:
+    get: { summary: Platform metrics, responses: { '200': { description: OK } } }
+  /portal/users:
+    get: { summary: User management list, responses: { '200': { description: OK } } }
+  /portal/users/{id}/role:
+    patch: { summary: Assign or revoke roles, responses: { '200': { description: OK } } }
+  /portal/users/{id}/suspend:
+    patch: { summary: Suspend user and invalidate sessions, responses: { '200': { description: OK } } }
+  /portal/audit-logs:
+    get: { summary: Audit log explorer, responses: { '200': { description: OK } } }
+  /notifications:
+    get: { summary: User notifications, responses: { '200': { description: OK } } }
+  /uploads/presign:
+    post: { summary: Create scoped R2 upload key, responses: { '200': { description: OK } } }

@@ -1,0 +1,44 @@
+name = "university-grievance-api"
+main = "apps/worker/src/index.ts"
+compatibility_date = "2026-05-22"
+
+[vars]
+FRONTEND_URL = "https://grievance-portal.pages.dev"
+ALLOWED_EMAIL_DOMAIN = "university.edu"
+SESSION_TTL_SECONDS = "604800"
+ISSUE_EDIT_WINDOW_MINUTES = "30"
+DUPLICATE_LIKELY_THRESHOLD = "0.78"
+DUPLICATE_RELATED_THRESHOLD = "0.55"
+INITIAL_PORTAL_ADMIN_EMAIL = "admin@university.edu"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "university-grievance-db"
+database_id = "REPLACE_ME"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_ME"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "university-grievance-attachments"
+
+[[queues.producers]]
+binding = "NOTIFICATION_QUEUE"
+queue = "grievance-notifications"
+
+[[queues.consumers]]
+queue = "grievance-notifications"
+
+[[durable_objects.bindings]]
+name = "ISSUE_ROOMS"
+class_name = "IssueRoom"
+
+[[durable_objects.bindings]]
+name = "NOTIFICATION_HUB"
+class_name = "NotificationHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["IssueRoom", "NotificationHub"]

@@ -1,12 +1,20 @@
 {
-  "name": "university-issue-tracker",
+  "name": "university-grievance-portal",
   "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/worker"
+  ],
   "scripts": {
-    "install:all": "npm install --prefix worker && npm install --prefix frontend",
-    "dev": "npm run dev --prefix worker",
-    "dev:worker": "npm run dev --prefix worker",
-    "dev:frontend": "npm run dev --prefix frontend",
-    "build": "npm run build --prefix worker && npm run build --prefix frontend",
-    "typecheck": "npm run typecheck --prefix worker && npm run typecheck --prefix frontend"
+    "dev": "npm run dev:web",
+    "dev:web": "npm run dev --workspace @grievance/web",
+    "dev:worker": "npm run dev --workspace @grievance/worker",
+    "build": "npm run build --workspace @grievance/worker && npm run build --workspace @grievance/web",
+    "typecheck": "npm run typecheck --workspace @grievance/worker && npm run typecheck --workspace @grievance/web",
+    "db:migrate:local": "npm run db:migrate:local --workspace @grievance/worker",
+    "db:seed:local": "npm run db:seed:local --workspace @grievance/worker"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
   }
 }

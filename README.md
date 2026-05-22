@@ -1,34 +1,67 @@
-# University Issue Tracker
+# University Grievance Portal
 
-Full-stack campus issue tracker for Cloudflare's free tier:
+Production MVP for a single-university grievance platform on Cloudflare.
 
-- `frontend/`: React, TypeScript, Vite, TailwindCSS, TanStack Query, React Router.
-- `worker/`: Cloudflare Workers, Hono, D1, KV, R2, Resend-ready email flow.
-- `schema.sql`: D1 schema and indexes.
-- `seed.sql`: starter categories and tags.
+## Stack
+
+- Frontend: Next.js, React, TailwindCSS, shadcn-style primitives, Framer Motion-ready UI, React Query
+- API: Cloudflare Workers with Hono
+- Data: Cloudflare D1
+- Files: Cloudflare R2
+- Sessions, cache, and rate limits: Cloudflare KV
+- Async notifications: Cloudflare Queues
+- Realtime hooks: Durable Objects
 
 ## Local Setup
 
 ```bash
-npm run install:all
+npm install
+npm run db:migrate:local
+npm run db:seed:local
 npm run dev:worker
-npm run dev:frontend
+npm run dev:web
 ```
 
-The frontend defaults to `http://localhost:5173` and calls the Worker at `http://localhost:8787`.
-
-## Cloudflare Setup
+Set Worker secrets before deploying:
 
 ```bash
-wrangler d1 create issue-tracker-db
-wrangler d1 execute issue-tracker-db --file=./schema.sql
-wrangler d1 execute issue-tracker-db --file=./seed.sql
-wrangler kv:namespace create KV
-wrangler r2 bucket create issue-tracker-attachments
-cd worker
-wrangler secret put JWT_SECRET
-wrangler secret put RESEND_API_KEY
-wrangler deploy
+wrangler secret put JWT_SECRET --config apps/worker/wrangler.toml
+wrangler secret put GOOGLE_CLIENT_ID --config apps/worker/wrangler.toml
+wrangler secret put GOOGLE_CLIENT_SECRET --config apps/worker/wrangler.toml
 ```
 
-Update `worker/wrangler.toml` with your D1 and KV IDs before deploying.
+Optional email delivery uses `RESEND_API_KEY` and `EMAIL_FROM`.
+
+## Build
+
+```bash
+npm run build
+```
+
+## Database
+
+`schema.sql` creates normalized D1 tables for users, RBAC, issues, workflow events, comments, solutions, attachments, notifications, audit logs, moderation, and settings. `seed.sql` installs default roles, permissions, role mappings, categories, departments, tags, and settings.
+
+## Auth And RBAC
+
+Signup is restricted by `ALLOWED_EMAIL_DOMAIN`. New users receive the `student` role. `INITIAL_PORTAL_ADMIN_EMAIL` bootstraps the first portal admin. Worker middleware supports:
+
+- `requireAuth()`
+- `requirePermission(permission)`
+- `requireAnyPermission(permissions)`
+
+Privileged workflow, merge, role, suspension, and settings actions write audit logs.
+
+## Duplicate Detection
+
+No external AI calls are used. The Worker normalizes text, removes stop words, applies simple suffix trimming, queries recent D1 candidates, and scores title overlap, description overlap, category, department, tags hook, recency, and location keywords.
+
+## Deployment
+
+- Deploy `apps/web` to Cloudflare Pages.
+- Deploy the API with `wrangler deploy --config apps/worker/wrangler.toml`.
+- Apply D1 migrations with `wrangler d1 execute university-grievance-db --file=schema.sql`.
+- Seed with `wrangler d1 execute university-grievance-db --file=seed.sql`.
+- Replace placeholder binding IDs in `wrangler.toml`.
+
+OpenAPI source is in `openapi.yaml`; the Worker also exposes `/api/v1/openapi.json` and `/api/v1/docs`.

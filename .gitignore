@@ -1,6 +1,9 @@
 node_modules/
 dist/
+.next/
+apps/web/.next/
 .wrangler/
 .dev.vars
 .DS_Store
 *.log
+*.tsbuildinfo

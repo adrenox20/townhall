@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 20% 98%;
+  --foreground: 222 32% 12%;
+  --panel: 0 0% 100%;
+  --muted: 214 24% 92%;
+  --border: 214 20% 84%;
+  --primary: 196 84% 32%;
+  --accent: 37 92% 52%;
+  --danger: 0 72% 48%;
+}
+
+.dark {
+  --background: 222 28% 8%;
+  --foreground: 210 28% 94%;
+  --panel: 222 24% 12%;
+  --muted: 220 18% 20%;
+  --border: 220 16% 28%;
+  --primary: 190 90% 42%;
+  --accent: 42 90% 56%;
+  --danger: 0 68% 58%;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+a { color: inherit; text-decoration: none; }
+button, input, textarea, select { font: inherit; }
+:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
