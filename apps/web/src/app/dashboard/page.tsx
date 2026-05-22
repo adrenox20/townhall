@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { getHighestRole } from '@/lib/roles';
 import { useIssues } from '@/hooks/use-issues';
-import { useAdminDashboard } from '@/hooks/use-admin';
+import { useAdminDashboard, usePublicStats } from '@/hooks/use-admin';
 import { RouteGuard } from '@/components/shared/route-guard';
 import { PageSkeleton } from '@/components/shared/loading-skeleton';
 import { Button } from '@/components/ui/button';
@@ -40,10 +40,13 @@ function DashboardContent() {
   // Admin dashboard stats
   const { data: adminData, isLoading: adminLoading, error: adminError, refetch: refetchAdmin } = useAdminDashboard();
 
+  // Public stats for students (no permission required)
+  const { data: publicStats, isLoading: publicStatsLoading } = usePublicStats();
+
   // Fetch open issues count for student stats
   const { data: openIssuesData, isLoading: openLoading } = useIssues({ status: 'open', limit: 1 });
 
-  const isLoading = trendingLoading || myIssuesLoading || (isAdmin && adminLoading) || (!isAdmin && openLoading);
+  const isLoading = trendingLoading || myIssuesLoading || (isAdmin && adminLoading) || (!isAdmin && (openLoading || publicStatsLoading));
   const hasError = trendingError || myIssuesError || (isAdmin && adminError);
 
   if (isLoading) {
@@ -65,9 +68,9 @@ function DashboardContent() {
 
   const trending = trendingData?.items ?? [];
   const myIssues = myIssuesData?.items ?? [];
-  const totalOpen = openIssuesData?.total ?? 0;
+  const totalOpen = openIssuesData?.total ?? publicStats?.total ?? 0;
+  const totalResolved = isAdmin ? Number(adminData?.totals?.resolved ?? 0) : (publicStats?.resolved ?? 0);
 
-  // Build stats based on role
   const stats = isAdmin
     ? [
         { label: 'Unassigned queue', value: Number(adminData?.totals?.total ?? 0) - Number(adminData?.totals?.resolved ?? 0), delta: 'Needs triage', deltaDir: '' as const, hint: '' },
@@ -76,10 +79,10 @@ function DashboardContent() {
         { label: 'Avg. resolution', value: '—', delta: '', deltaDir: '' as const, hint: '' },
       ]
     : [
-        { label: 'Open across campus', value: totalOpen, delta: '', deltaDir: '' as const, hint: '' },
+        { label: 'Open across campus', value: publicStats?.total ?? 0, delta: '', deltaDir: '' as const, hint: '' },
         { label: 'Your reports', value: myIssuesData?.total ?? 0, delta: `${myIssues.filter(i => i.status === 'open' || i.status === 'in_progress').length} active`, deltaDir: '' as const, hint: '' },
-        { label: 'Resolved this week', value: String(adminData?.totals?.resolved ?? 0), delta: '', deltaDir: '' as const, hint: '' },
-        { label: 'Avg. response', value: '—', delta: '', deltaDir: '' as const, hint: '' },
+        { label: 'Resolved', value: totalResolved, delta: '', deltaDir: '' as const, hint: '' },
+        { label: 'In progress', value: publicStats?.in_progress ?? 0, delta: '', deltaDir: '' as const, hint: '' },
       ];
 
   const userName = user?.name?.split(' ')[0] ?? 'there';
@@ -160,11 +163,11 @@ function DashboardContent() {
           <Card title="This week" sub="Issues opened vs resolved">
             <div style={{ display: 'flex', gap: 24, padding: '8px 0' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{isAdmin ? Number(adminData?.totals?.total ?? 0) : totalOpen}</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{isAdmin ? Number(adminData?.totals?.total ?? 0) : (publicStats?.total ?? 0)}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Open</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--success)' }}>{String(adminData?.totals?.resolved ?? 0)}</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--success)' }}>{totalResolved}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Resolved</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>

@@ -13,9 +13,19 @@ solutionRoutes.use('*', requireAuth());
 
 solutionRoutes.get('/issues/:id/solutions', async (c) => {
   const user = c.get('user');
-  const rows = await c.env.DB.prepare('SELECT * FROM solutions WHERE issue_id = ? AND (? = 1 OR status NOT IN ("hidden", "rejected"))')
-    .bind(c.req.param('id'), user.permissions.includes('solution:review') ? 1 : 0).all<Record<string, never>>();
-  return ok(c, rows.results.map((solution) => ({ ...solution, rank: solutionRank(solution as never) })).sort((a, b) => b.rank - a.rank));
+  const rows = await c.env.DB.prepare(
+    `SELECT s.*,
+      json_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) AS author
+     FROM solutions s
+     LEFT JOIN users u ON u.id = s.author_id
+     WHERE s.issue_id = ? AND (? = 1 OR s.status NOT IN ('hidden', 'rejected'))`
+  ).bind(c.req.param('id'), user.permissions.includes('solution:review') ? 1 : 0).all<Record<string, unknown>>();
+
+  const parsed = rows.results.map(row => ({
+    ...row,
+    author: (() => { try { return JSON.parse(row.author as string); } catch { return null; } })(),
+  }));
+  return ok(c, parsed.map((solution) => ({ ...solution, rank: solutionRank(solution as never) })).sort((a, b) => (b.rank as number) - (a.rank as number)));
 });
 
 solutionRoutes.post('/issues/:id/solutions', zValidator('json', z.object({ body: z.string().min(5) })), async (c) => {
@@ -52,8 +62,10 @@ solutionRoutes.patch('/solutions/:id/status', requirePermission('solution:review
   return ok(c, { status: c.req.valid('json').status });
 });
 
-solutionRoutes.post('/issues/:id/official-solution', requirePermission('solution:official_select'), zValidator('json', z.object({ solutionId: z.string() })), async (c) => {
-  const { solutionId } = c.req.valid('json');
+solutionRoutes.post('/issues/:id/official-solution', requirePermission('solution:official_select'), zValidator('json', z.object({ solutionId: z.string().optional(), solution_id: z.string().optional() })), async (c) => {
+  const body = c.req.valid('json');
+  const solutionId = body.solutionId || body.solution_id;
+  if (!solutionId) return ok(c, { error: 'solutionId required' });
   await c.env.DB.batch([
     c.env.DB.prepare('UPDATE solutions SET is_official = 0 WHERE issue_id = ?').bind(c.req.param('id')),
     c.env.DB.prepare('UPDATE solutions SET is_official = 1, status = "accepted", updated_at = ? WHERE id = ? AND issue_id = ?').bind(now(), solutionId, c.req.param('id'))

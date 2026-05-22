@@ -1,6 +1,34 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
+export interface ApiCategory {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface ApiDepartment {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export function useCategories() {
+  return useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api<ApiCategory[]>('/categories'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useDepartments() {
+  return useQuery({
+    queryKey: ['departments'],
+    queryFn: () => api<ApiDepartment[]>('/departments'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 // Types for API responses
 export interface ApiIssue {
   id: string;
@@ -75,7 +103,7 @@ export function useCreateIssue() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { title: string; description: string; category_id?: string; department_id?: string; urgency?: string; is_anonymous?: boolean }) =>
-      api<ApiIssue>('/issues', { method: 'POST', body: JSON.stringify(data) }),
+      api<{ id: string; public_id: string; similar: unknown[] }>('/issues', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['issues'] }); },
   });
 }
@@ -109,9 +137,30 @@ export function useVoteIssue() {
   return useMutation({
     mutationFn: ({ id }: { id: string }) =>
       api<{ votes: number }>(`/issues/${id}/vote`, { method: 'POST' }),
-    onSuccess: (_, { id }) => {
+    onMutate: async ({ id }) => {
+      // Optimistic update — increment vote count immediately
+      await queryClient.cancelQueries({ queryKey: ['issues', id] });
+      const previous = queryClient.getQueryData<ApiIssue>(['issues', id]);
+      if (previous) {
+        queryClient.setQueryData<ApiIssue>(['issues', id], {
+          ...previous,
+          votes: (previous.votes ?? 0) + 1,
+        });
+      }
+      return { previous };
+    },
+    onSuccess: (data, { id }) => {
+      // Sync with real server count
+      queryClient.setQueryData<ApiIssue>(['issues', id], (old) =>
+        old ? { ...old, votes: data.votes } : old
+      );
       queryClient.invalidateQueries({ queryKey: ['issues'] });
-      queryClient.invalidateQueries({ queryKey: ['issues', id] });
+    },
+    onError: (_err, { id }, context) => {
+      // Roll back on error
+      if (context?.previous) {
+        queryClient.setQueryData(['issues', id], context.previous);
+      }
     },
   });
 }

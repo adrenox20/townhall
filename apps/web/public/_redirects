@@ -1,2 +1,3 @@
-/issues/new  /issues/new/  200
-/issues/*  /issues/_/  200
+/issues/new  /issues/new/  301
+/issues/:id  /issues/_/  200
+/issues/:id/  /issues/_/  200

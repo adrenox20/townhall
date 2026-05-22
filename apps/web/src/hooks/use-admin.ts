@@ -26,6 +26,13 @@ export function useAdminDashboard() {
   });
 }
 
+export function usePublicStats() {
+  return useQuery({
+    queryKey: ['analytics', 'summary'],
+    queryFn: () => api<{ total: number; resolved: number; in_progress: number }>('/analytics/summary'),
+  });
+}
+
 export function useAdminKanban() {
   return useQuery({
     queryKey: ['admin', 'kanban'],

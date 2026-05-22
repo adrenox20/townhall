@@ -81,8 +81,12 @@ function IssueDetailContent() {
     }
   }
 
+  const [voted, setVoted] = useState(false);
+
   function handleVote() {
-    voteIssue.mutate({ id: issue!.id });
+    voteIssue.mutate({ id: issue!.id }, {
+      onSuccess: () => setVoted(true),
+    });
   }
 
   function handleSubmitComment(e: React.FormEvent) {
@@ -116,9 +120,15 @@ function IssueDetailContent() {
               <span>{new Date(issue.created_at).toLocaleDateString()}</span>
             </div>
             <div className="mt-4 flex items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={handleVote} disabled={voteIssue.isPending}>
+              <Button
+                variant={voted ? 'accent' : 'ghost'}
+                size="sm"
+                onClick={handleVote}
+                disabled={voteIssue.isPending || voted}
+              >
                 <Icon name="thumbs-up" size={14} />
                 <span className="ml-1">{issue.votes}</span>
+                {voted && <span className="ml-1 text-xs">Upvoted</span>}
               </Button>
             </div>
           </CardContent>

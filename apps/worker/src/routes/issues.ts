@@ -17,30 +17,57 @@ const writeIssue = z.object({ title: z.string().min(5), description: z.string().
 issueRoutes.use('*', requireAuth());
 
 issueRoutes.get('/', async (c) => {
-  const q = `%${c.req.query('q') || ''}%`;
+  const q = `%${c.req.query('q') || c.req.query('search') || ''}%`;
   const status = c.req.query('status');
+  const sort = c.req.query('sort') || 'newest';
+  const limit = Math.min(Number(c.req.query('limit') || 50), 100);
+  const page = Math.max(Number(c.req.query('page') || 1), 1);
+  const offset = (page - 1) * limit;
+
+  const orderBy = sort === 'votes' ? 'votes DESC' : sort === 'oldest' ? 'i.created_at ASC' : 'i.created_at DESC';
+
   const rows = await c.env.DB.prepare(
-    `SELECT i.*, c.name category, d.name department,
+    `SELECT i.*,
+      json_object('id', c.id, 'name', c.name, 'slug', c.slug) AS category,
+      json_object('id', d.id, 'name', d.name, 'slug', d.slug) AS department,
       (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id) votes,
-      (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) comments
+      (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) comments_count
      FROM issues i
      LEFT JOIN categories c ON c.id = i.category_id
      LEFT JOIN departments d ON d.id = i.department_id
-     WHERE i.is_deleted = 0 AND (? IS NULL OR i.status = ?) AND (i.title LIKE ? OR i.description LIKE ?)
-     ORDER BY i.created_at DESC LIMIT 50`
-  ).bind(status || null, status || null, q, q).all();
-  return ok(c, rows.results);
+     WHERE i.is_deleted = 0
+       AND (? IS NULL OR i.status = ?)
+       AND (i.title LIKE ? OR i.description LIKE ?)
+     ORDER BY ${orderBy}
+     LIMIT ? OFFSET ?`
+  ).bind(status || null, status || null, q, q, limit, offset).all();
+
+  const countRow = await c.env.DB.prepare(
+    `SELECT COUNT(*) as total FROM issues i
+     WHERE i.is_deleted = 0
+       AND (? IS NULL OR i.status = ?)
+       AND (i.title LIKE ? OR i.description LIKE ?)`
+  ).bind(status || null, status || null, q, q).first<{ total: number }>();
+
+  const items = rows.results.map((row: Record<string, unknown>) => ({
+    ...row,
+    category: row.category_id ? (() => { try { return JSON.parse(row.category as string); } catch { return null; } })() : null,
+    department: row.department_id ? (() => { try { return JSON.parse(row.department as string); } catch { return null; } })() : null,
+  }));
+
+  return ok(c, { items, total: countRow?.total ?? 0, page, limit });
 });
 
 issueRoutes.post('/', requirePermission('issue:create'), zValidator('json', writeIssue), async (c) => {
   const body = c.req.valid('json');
   const user = c.get('user');
   const issueId = id('issue');
+  const publicId = publicIssueId();
   const category = body.categoryId ? await c.env.DB.prepare('SELECT sla_hours FROM categories WHERE id = ?').bind(body.categoryId).first<{ sla_hours: number }>() : null;
   await c.env.DB.prepare(
     `INSERT INTO issues (id, public_id, title, normalized_title, description, summary, category_id, department_id, author_id, status, urgency, is_anonymous, sla_due_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?, ?, ?, ?)`
-  ).bind(issueId, publicIssueId(), body.title, normalizeText(body.title), body.description, summary(body.description), body.categoryId || null, body.departmentId || null, user.id, body.urgency, body.isAnonymous ? 1 : 0, addHours(category?.sla_hours || 72), now(), now()).run();
+  ).bind(issueId, publicId, body.title, normalizeText(body.title), body.description, summary(body.description), body.categoryId || null, body.departmentId || null, user.id, body.urgency, body.isAnonymous ? 1 : 0, addHours(category?.sla_hours || 72), now(), now()).run();
   for (const tagId of body.tags) await c.env.DB.prepare('INSERT OR IGNORE INTO issue_tags (issue_id, tag_id) VALUES (?, ?)').bind(issueId, tagId).run();
   await c.env.DB.prepare('INSERT INTO issue_watchers (issue_id, user_id, created_at) VALUES (?, ?, ?)').bind(issueId, user.id, now()).run();
   const similar = await findSimilarIssues(c, body);
@@ -48,15 +75,43 @@ issueRoutes.post('/', requirePermission('issue:create'), zValidator('json', writ
     .bind(id('rel'), issueId, candidate.id, candidate.recommendation, candidate.score, now()).run();
   await c.env.DB.prepare('INSERT INTO activity_events (id, issue_id, actor_id, type, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(id('act'), issueId, user.id, 'issue_created', 'Issue submitted for review', now()).run();
-  return created(c, { id: issueId, similar });
+  return created(c, { id: issueId, public_id: publicId, similar });
 });
 
 issueRoutes.post('/similar', zValidator('json', writeIssue.partial({ urgency: true, isAnonymous: true, tags: true })), async (c) => ok(c, await findSimilarIssues(c, c.req.valid('json'))));
 
 issueRoutes.get('/:id', async (c) => {
-  const issue = await c.env.DB.prepare('SELECT * FROM issues WHERE id = ? AND is_deleted = 0').bind(c.req.param('id')).first();
+  const param = c.req.param('id');
+  // Accept both UUID (id) and public_id (e.g. GRV-434473)
+  const issue = await c.env.DB.prepare(
+    `SELECT i.*,
+      json_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) AS author,
+      CASE WHEN i.assignee_id IS NOT NULL THEN json_object('id', a.id, 'name', a.name, 'avatar_url', a.avatar_url) ELSE NULL END AS assignee,
+      CASE WHEN i.category_id IS NOT NULL THEN json_object('id', cat.id, 'name', cat.name, 'slug', cat.slug) ELSE NULL END AS category,
+      CASE WHEN i.department_id IS NOT NULL THEN json_object('id', d.id, 'name', d.name, 'slug', d.slug) ELSE NULL END AS department,
+      (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id) AS votes,
+      (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) AS comments_count
+     FROM issues i
+     LEFT JOIN users u ON u.id = i.author_id
+     LEFT JOIN users a ON a.id = i.assignee_id
+     LEFT JOIN categories cat ON cat.id = i.category_id
+     LEFT JOIN departments d ON d.id = i.department_id
+     WHERE (i.id = ? OR i.public_id = ?) AND i.is_deleted = 0`
+  ).bind(param, param).first<Record<string, unknown>>();
   if (!issue) return fail(c, 'NOT_FOUND', 'Issue not found', 404);
-  return ok(c, issue);
+
+  const parse = (field: unknown) => {
+    if (!field) return null;
+    try { return JSON.parse(field as string); } catch { return null; }
+  };
+
+  return ok(c, {
+    ...issue,
+    author: parse(issue.author),
+    assignee: parse(issue.assignee),
+    category: parse(issue.category),
+    department: parse(issue.department),
+  });
 });
 
 issueRoutes.patch('/:id', zValidator('json', writeIssue.partial()), async (c) => {
@@ -91,8 +146,10 @@ issueRoutes.patch('/:id/status', requirePermission('issue:status_update'), zVali
   return ok(c, { status: body.status });
 });
 
-issueRoutes.patch('/:id/assign', requirePermission('issue:assign'), zValidator('json', z.object({ assigneeId: z.string() })), async (c) => {
-  const { assigneeId } = c.req.valid('json');
+issueRoutes.patch('/:id/assign', requirePermission('issue:assign'), zValidator('json', z.object({ assigneeId: z.string().optional(), assignee_id: z.string().optional() })), async (c) => {
+  const body = c.req.valid('json');
+  const assigneeId = body.assigneeId || body.assignee_id;
+  if (!assigneeId) return fail(c, 'BAD_REQUEST', 'assigneeId is required', 400);
   await c.env.DB.prepare('UPDATE issues SET assignee_id = ?, updated_at = ? WHERE id = ?').bind(assigneeId, now(), c.req.param('id')).run();
   await c.env.DB.prepare('INSERT INTO issue_assignments (id, issue_id, assignee_id, actor_id, created_at) VALUES (?, ?, ?, ?, ?)').bind(id('asg'), c.req.param('id'), assigneeId, c.get('user').id, now()).run();
   await audit(c, 'issue.assign', 'issue', c.req.param('id'), { assigneeId });
@@ -100,8 +157,10 @@ issueRoutes.patch('/:id/assign', requirePermission('issue:assign'), zValidator('
 });
 
 issueRoutes.post('/:id/vote', async (c) => {
-  await c.env.DB.prepare('INSERT OR REPLACE INTO issue_votes (issue_id, user_id, value, created_at) VALUES (?, ?, 1, ?)').bind(c.req.param('id'), c.get('user').id, now()).run();
-  return ok(c, { voted: true });
+  const issueId = c.req.param('id');
+  await c.env.DB.prepare('INSERT OR REPLACE INTO issue_votes (issue_id, user_id, value, created_at) VALUES (?, ?, 1, ?)').bind(issueId, c.get('user').id, now()).run();
+  const row = await c.env.DB.prepare('SELECT COUNT(*) as votes FROM issue_votes WHERE issue_id = ?').bind(issueId).first<{ votes: number }>();
+  return ok(c, { votes: row?.votes ?? 0 });
 });
 
 issueRoutes.post('/:id/follow', async (c) => {
@@ -115,8 +174,17 @@ issueRoutes.delete('/:id/follow', async (c) => {
 });
 
 issueRoutes.get('/:id/timeline', async (c) => {
-  const rows = await c.env.DB.prepare('SELECT * FROM activity_events WHERE issue_id = ? ORDER BY created_at DESC').bind(c.req.param('id')).all();
-  return ok(c, rows.results);
+  const rows = await c.env.DB.prepare(
+    `SELECT ae.*,
+      json_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) AS actor
+     FROM activity_events ae
+     LEFT JOIN users u ON u.id = ae.actor_id
+     WHERE ae.issue_id = ? ORDER BY ae.created_at ASC`
+  ).bind(c.req.param('id')).all<Record<string, unknown>>();
+  return ok(c, rows.results.map(row => ({
+    ...row,
+    actor: (() => { try { return JSON.parse(row.actor as string); } catch { return null; } })(),
+  })));
 });
 
 issueRoutes.post('/:id/merge', requirePermission('issue:merge'), zValidator('json', z.object({ mergedIssueId: z.string(), reason: z.string().optional(), score: z.number().optional() })), async (c) => {

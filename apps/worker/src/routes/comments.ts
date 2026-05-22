@@ -12,16 +12,27 @@ commentRoutes.use('*', requireAuth());
 
 commentRoutes.get('/issues/:id/comments', async (c) => {
   const user = c.get('user');
-  const rows = await c.env.DB.prepare('SELECT * FROM comments WHERE issue_id = ? AND is_deleted = 0 AND (? = 1 OR is_internal = 0) ORDER BY is_pinned DESC, created_at ASC')
-    .bind(c.req.param('id'), user.permissions.includes('comment:moderate') ? 1 : 0).all();
-  return ok(c, rows.results);
+  const rows = await c.env.DB.prepare(
+    `SELECT cm.*,
+      json_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) AS author
+     FROM comments cm
+     LEFT JOIN users u ON u.id = cm.author_id
+     WHERE cm.issue_id = ? AND cm.is_deleted = 0 AND (? = 1 OR cm.is_internal = 0)
+     ORDER BY cm.is_pinned DESC, cm.created_at ASC`
+  ).bind(c.req.param('id'), user.permissions.includes('comment:moderate') ? 1 : 0).all<Record<string, unknown>>();
+
+  return ok(c, rows.results.map(row => ({
+    ...row,
+    author: (() => { try { return JSON.parse(row.author as string); } catch { return null; } })(),
+  })));
 });
 
-commentRoutes.post('/issues/:id/comments', zValidator('json', z.object({ body: z.string().min(1), isInternal: z.boolean().default(false), isOfficial: z.boolean().default(false) })), async (c) => {
+commentRoutes.post('/issues/:id/comments', zValidator('json', z.object({ body: z.string().min(1), isInternal: z.boolean().default(false), is_internal: z.boolean().optional(), isOfficial: z.boolean().default(false) })), async (c) => {
   const body = c.req.valid('json');
   const commentId = id('comment');
+  const isInternal = body.isInternal || body.is_internal || false;
   await c.env.DB.prepare('INSERT INTO comments (id, issue_id, author_id, body, is_internal, is_official, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(commentId, c.req.param('id'), c.get('user').id, body.body, body.isInternal ? 1 : 0, body.isOfficial ? 1 : 0, now(), now()).run();
+    .bind(commentId, c.req.param('id'), c.get('user').id, body.body, isInternal ? 1 : 0, body.isOfficial ? 1 : 0, now(), now()).run();
   return created(c, { id: commentId });
 });
 
