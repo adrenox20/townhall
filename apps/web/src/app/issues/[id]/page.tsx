@@ -4,6 +4,10 @@ import { CommentList } from '@/components/comments/comment-list';
 import { SolutionList } from '@/components/solutions/solution-list';
 import { demoIssues } from '@/lib/api';
 
+export function generateStaticParams() {
+  return demoIssues.map((issue) => ({ id: issue.id }));
+}
+
 export default async function IssueDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const issue = demoIssues.find((item) => item.id === id) || demoIssues[0];

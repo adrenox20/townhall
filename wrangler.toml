@@ -3,7 +3,7 @@ main = "apps/worker/src/index.ts"
 compatibility_date = "2026-05-22"
 
 [vars]
-FRONTEND_URL = "https://grievance-portal.pages.dev"
+FRONTEND_URL = "https://grievance-portal-78y.pages.dev"
 ALLOWED_EMAIL_DOMAIN = "university.edu"
 SESSION_TTL_SECONDS = "604800"
 ISSUE_EDIT_WINDOW_MINUTES = "30"
@@ -14,11 +14,11 @@ INITIAL_PORTAL_ADMIN_EMAIL = "admin@university.edu"
 [[d1_databases]]
 binding = "DB"
 database_name = "university-grievance-db"
-database_id = "REPLACE_ME"
+database_id = "92eaa9b4-14fc-4922-b64e-20a77b72336b"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_ME"
+id = "57f2676ccf39436593c02d240ad82f40"
 
 [[r2_buckets]]
 binding = "R2"
