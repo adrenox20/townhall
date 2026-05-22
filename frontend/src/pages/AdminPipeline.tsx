@@ -116,9 +116,10 @@ function PipelineColumn({ id, count, children }: { id: string; count: number; ch
 }
 
 function DraggableCard({ issue, isMoving, isDragActive }: { issue: Issue; isMoving: boolean; isDragActive: boolean }) {
-  const { attributes, listeners, setNodeRef } = useDraggable({ id: issue.id });
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: issue.id });
+  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={`w-full rounded-lg border border-white/[0.08] bg-[#1a1d2e] p-3 text-left transition-all cursor-grab active:cursor-grabbing hover:border-indigo-500/30 ${isDragActive ? 'opacity-30 scale-95' : ''} ${isMoving ? 'opacity-50 animate-pulse' : ''}`}>
+    <div ref={setNodeRef} {...listeners} {...attributes} style={style} className={`w-full rounded-lg border border-white/[0.08] bg-[#1a1d2e] p-3 text-left transition-none cursor-grab active:cursor-grabbing hover:border-indigo-500/30 ${isDragActive ? 'opacity-30 scale-95' : ''} ${isMoving ? 'opacity-50 animate-pulse' : ''}`}>
       <div className="flex items-start gap-2">
         <GripVertical size={12} className="text-slate-600 mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">
