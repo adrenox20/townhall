@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { statusLabels, statuses } from '@/lib/constants';
@@ -17,13 +16,21 @@ import { Icon } from '@/components/ui/icon';
 import { SkeletonCard } from '@/components/shared/loading-skeleton';
 
 function IssueDetailContent() {
-  const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
 
-  const { data: issue, isLoading: issueLoading, error: issueError } = useIssue(id);
-  const { data: comments, isLoading: commentsLoading } = useComments(id);
-  const { data: solutions, isLoading: solutionsLoading } = useSolutions(id);
-  const { data: timeline, isLoading: timelineLoading } = useTimeline(id);
+  // Static export: useParams() always returns the placeholder '_'.
+  // Read the real issue ID from window.location after mount.
+  const [issueId, setIssueId] = useState<string>('');
+  useEffect(() => {
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    const id = parts[parts.length - 1];
+    if (id && id !== '_') setIssueId(id);
+  }, []);
+
+  const { data: issue, isLoading: issueLoading, error: issueError } = useIssue(issueId);
+  const { data: comments, isLoading: commentsLoading } = useComments(issueId);
+  const { data: solutions, isLoading: solutionsLoading } = useSolutions(issueId);
+  const { data: timeline, isLoading: timelineLoading } = useTimeline(issueId);
 
   const updateStatus = useUpdateIssueStatus();
   const assignIssue = useAssignIssue();
@@ -97,7 +104,6 @@ function IssueDetailContent() {
       { onSuccess: () => setCommentBody('') }
     );
   }
-
   return (
     <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
       {/* Left column: Issue detail, comments, comment form */}

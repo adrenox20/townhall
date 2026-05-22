@@ -19,7 +19,7 @@ export function useSolutions(issueId: string) {
   return useQuery({
     queryKey: ['solutions', issueId],
     queryFn: () => api<ApiSolution[]>(`/issues/${issueId}/solutions`),
-    enabled: !!issueId,
+    enabled: !!issueId && issueId !== '_',
   });
 }
 

@@ -16,6 +16,6 @@ export function useTimeline(issueId: string) {
   return useQuery({
     queryKey: ['timeline', issueId],
     queryFn: () => api<ApiTimelineEvent[]>(`/issues/${issueId}/timeline`),
-    enabled: !!issueId,
+    enabled: !!issueId && issueId !== '_',
   });
 }

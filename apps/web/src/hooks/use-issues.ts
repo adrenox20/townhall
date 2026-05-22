@@ -95,7 +95,7 @@ export function useIssue(id: string) {
   return useQuery({
     queryKey: ['issues', id],
     queryFn: () => api<ApiIssue>(`/issues/${id}`),
-    enabled: !!id,
+    enabled: !!id && id !== '_',
   });
 }
 

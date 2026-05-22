@@ -19,7 +19,7 @@ export function useComments(issueId: string) {
   return useQuery({
     queryKey: ['comments', issueId],
     queryFn: () => api<ApiComment[]>(`/issues/${issueId}/comments`),
-    enabled: !!issueId,
+    enabled: !!issueId && issueId !== '_',
   });
 }
 
