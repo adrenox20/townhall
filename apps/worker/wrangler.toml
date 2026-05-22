@@ -16,11 +16,11 @@ INITIAL_PORTAL_ADMIN_EMAIL = "admin@nst.rishihood.edu.in"
 [[d1_databases]]
 binding = "DB"
 database_name = "university-grievance-db"
-database_id = "REPLACE_ME"
+database_id = "92eaa9b4-14fc-4922-b64e-20a77b72336b"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_ME"
+id = "f1a64973eb324afc82e48a4fe4402f40"
 
 [[r2_buckets]]
 binding = "R2"
