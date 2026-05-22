@@ -1,5 +1,5 @@
 export const ALLOWED_EMAIL_DOMAINS = (
-  process.env.NEXT_PUBLIC_ALLOWED_EMAIL_DOMAINS || 'rishihood.edu.in,nst.rishihood.edu.in'
+  process.env.NEXT_PUBLIC_ALLOWED_EMAIL_DOMAINS || 'rishihood.edu.in'
 )
   .split(',')
   .map((d) => d.trim())
