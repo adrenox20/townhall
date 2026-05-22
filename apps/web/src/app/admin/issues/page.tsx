@@ -23,7 +23,7 @@ function AdminIssuesList() {
           <tbody>
             {(data?.items ?? []).map((issue) => (
               <tr key={issue.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: 12 }}><Link href={`/issues/${issue.id}`}>{issue.public_id}</Link></td>
+                <td style={{ padding: 12 }}><Link href={`/issues/${issue.public_id}`}>{issue.public_id}</Link></td>
                 <td style={{ padding: 12 }}>{issue.title}</td>
                 <td style={{ padding: 12 }}><StatusBadge status={issue.status} /></td>
                 <td style={{ padding: 12 }}>{issue.urgency}</td>

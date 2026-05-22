@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useApp } from '@/context/app-context';
 
 export interface ApiComment {
   id: string;
@@ -25,9 +26,11 @@ export function useComments(issueId: string) {
 
 export function useCreateComment() {
   const queryClient = useQueryClient();
+  const { pushToast } = useApp();
   return useMutation({
     mutationFn: ({ issueId, body, is_internal }: { issueId: string; body: string; is_internal?: boolean }) =>
       api<ApiComment>(`/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify({ body, is_internal }) }),
     onSuccess: (_, { issueId }) => { queryClient.invalidateQueries({ queryKey: ['comments', issueId] }); },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to post comment', 'alert'); },
   });
 }

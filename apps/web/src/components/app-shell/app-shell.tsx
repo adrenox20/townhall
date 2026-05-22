@@ -32,6 +32,7 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const router = useRouter();
   const { data: notifications } = useNotifications();
 
@@ -40,9 +41,18 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
   const notificationCount = notifications?.filter((n) => !n.is_read).length ?? 0;
   const recentNotifs = (notifications ?? []).slice(0, 4);
 
+  function closeMobileNav() {
+    setMobileNavOpen(false);
+  }
+
   return (
     <div className="app-grid">
-      <aside className="sidebar">
+      {/* Mobile backdrop — click to close sidebar */}
+      {mobileNavOpen && (
+        <div className="sidebar-backdrop" onClick={closeMobileNav} aria-hidden="true" />
+      )}
+
+      <aside className={`sidebar${mobileNavOpen ? ' sidebar--open' : ''}`}>
         <div className="brand">
           <div className="brand-mark">R</div>
           <div>
@@ -58,6 +68,7 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
               <Link
                 key={n.href}
                 href={n.href}
+                onClick={closeMobileNav}
                 className={`nav-item${pathname === n.href || pathname.startsWith(n.href + '/') ? ' active' : ''}`}
               >
                 <Icon name={n.icon} size={15} />
@@ -70,7 +81,17 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
 
       <div className="main">
         <header className="topbar">
-          <div className="search-wrap" style={{ maxWidth: 420 }}>
+          {/* Hamburger — only visible on mobile */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hamburger-btn"
+            onClick={() => setMobileNavOpen((o) => !o)}
+            icon="menu"
+            aria-label="Open navigation"
+          />
+
+          <div className="search-wrap">
             <Icon name="search" size={14} className="search-icon" />
             <input className="search-input" placeholder="Search issues..." />
           </div>
@@ -81,10 +102,16 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
               size="icon"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               icon={theme === 'dark' ? 'sun' : 'moon'}
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             />
 
             <div style={{ position: 'relative' }}>
-              <Button variant="ghost" size="icon" onClick={() => setNotifOpen((o) => !o)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setNotifOpen((o) => !o)}
+                aria-label="Notifications"
+              >
                 <span style={{ position: 'relative', display: 'inline-flex' }}>
                   <Icon name="bell" size={15} />
                   {notificationCount > 0 && (
@@ -127,7 +154,7 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
                   {role === 'portal_admin' ? 'Portal Admin' : role === 'institution_admin' ? 'Staff' : 'Student'}
                 </span>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => logout()} icon="log-out" title="Logout" />
+              <Button variant="ghost" size="icon" onClick={() => logout()} icon="log-out" title="Logout" aria-label="Logout" />
             </div>
           </div>
         </header>

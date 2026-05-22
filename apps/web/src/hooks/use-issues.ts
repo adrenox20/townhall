@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useApp } from '@/context/app-context';
 
 export interface ApiCategory {
   id: string;
@@ -110,6 +111,7 @@ export function useCreateIssue() {
 
 export function useUpdateIssueStatus() {
   const queryClient = useQueryClient();
+  const { pushToast } = useApp();
   return useMutation({
     mutationFn: ({ id, status, note }: { id: string; status: string; note?: string }) =>
       api<ApiIssue>(`/issues/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, note }) }),
@@ -117,11 +119,13 @@ export function useUpdateIssueStatus() {
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['issues', id] });
     },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update status', 'alert'); },
   });
 }
 
 export function useAssignIssue() {
   const queryClient = useQueryClient();
+  const { pushToast } = useApp();
   return useMutation({
     mutationFn: ({ id, assignee_id }: { id: string; assignee_id: string }) =>
       api<ApiIssue>(`/issues/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ assignee_id }) }),
@@ -129,6 +133,7 @@ export function useAssignIssue() {
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['issues', id] });
     },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to assign issue', 'alert'); },
   });
 }
 

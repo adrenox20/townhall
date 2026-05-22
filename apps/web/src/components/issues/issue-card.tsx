@@ -19,7 +19,7 @@ export type IssueCardData = {
 
 export function IssueCard({ issue }: { issue: IssueCardData }) {
   return (
-    <Link href={`/issues/${issue.id}`}>
+    <Link href={`/issues/${issue.public_id || issue.id}`}>
       <Card className="transition hover:border-primary">
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">

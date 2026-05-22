@@ -143,8 +143,8 @@ export default function NewIssuePage() {
               />
             </Field>
 
-            {/* Category + Department side by side */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {/* Category + Department side by side on sm+, stacked on mobile */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Category">
                 <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
                   <option value="">Select category</option>
