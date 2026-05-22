@@ -1,5 +1,16 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+'use client';
+
+import { RouteGuard } from '@/components/shared/route-guard';
+import { PageShell } from '@/components/shared/page-shell';
+
 export default function AdminSettingsPage() {
-  return <Card><CardHeader><h2 className="text-xl font-semibold">Categories, tags, departments, and SLA settings</h2></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><Input defaultValue="university.edu" /><Input defaultValue="72 hours default SLA" /></CardContent></Card>;
+  return (
+    <RouteGuard requiredRole="institution_admin">
+      <PageShell title="Settings" subtitle="Categories, tags, and departments (managed via API).">
+        <div className="card" style={{ padding: 20 }}>
+          <p className="text-sm text-foreground/70">Institution settings are configured through the admin API. Contact a portal admin for platform-wide changes.</p>
+        </div>
+      </PageShell>
+    </RouteGuard>
+  );
 }

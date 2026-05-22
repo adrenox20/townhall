@@ -1,5 +1,15 @@
+'use client';
+
+import { RouteGuard } from '@/components/shared/route-guard';
+import { PageShell } from '@/components/shared/page-shell';
 import { KanbanBoard } from '@/components/kanban/kanban-board';
 
 export default function AdminKanbanPage() {
-  return <div className="space-y-5"><div><h2 className="text-2xl font-semibold">Workflow kanban</h2><p className="text-sm text-foreground/60">Drag and drop validates transitions through the backend.</p></div><KanbanBoard /></div>;
+  return (
+    <RouteGuard requiredRole="institution_admin">
+      <PageShell title="Workflow kanban" subtitle="Drag cards to update status via the API.">
+        <KanbanBoard />
+      </PageShell>
+    </RouteGuard>
+  );
 }

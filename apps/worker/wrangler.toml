@@ -3,13 +3,15 @@ main = "src/index.ts"
 compatibility_date = "2026-05-22"
 
 [vars]
-FRONTEND_URL = "http://localhost:3000"
-ALLOWED_EMAIL_DOMAIN = "university.edu"
+FRONTEND_URL = "https://rutownhall.live"
+ALLOWED_EMAIL_DOMAIN = "rishihood.edu.in"
+ALLOWED_EMAIL_DOMAINS = "rishihood.edu.in,nst.rishihood.edu.in"
+GOOGLE_CLIENT_ID = "968761038415-dsp50r3h47b32imjd7nj4m9u2vjm623k.apps.googleusercontent.com"
 SESSION_TTL_SECONDS = "604800"
 ISSUE_EDIT_WINDOW_MINUTES = "30"
 DUPLICATE_LIKELY_THRESHOLD = "0.78"
 DUPLICATE_RELATED_THRESHOLD = "0.55"
-INITIAL_PORTAL_ADMIN_EMAIL = "admin@university.edu"
+INITIAL_PORTAL_ADMIN_EMAIL = "admin@nst.rishihood.edu.in"
 
 [[d1_databases]]
 binding = "DB"
@@ -42,3 +44,8 @@ class_name = "NotificationHub"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["IssueRoom", "NotificationHub"]
+
+[env.local]
+FRONTEND_URL = "http://localhost:3000"
+ALLOWED_EMAIL_DOMAINS = "rishihood.edu.in,nst.rishihood.edu.in"
+GOOGLE_CLIENT_ID = "968761038415-dsp50r3h47b32imjd7nj4m9u2vjm623k.apps.googleusercontent.com"

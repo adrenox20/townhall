@@ -1,58 +1,106 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ResponsiveContainer, AreaChart as RAreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useApp } from '@/context/app-context';
-import { ISSUES, CATEGORIES, peopleById } from '@/lib/data';
+import { useAuth } from '@/lib/auth';
+import { getHighestRole } from '@/lib/roles';
+import { useIssues } from '@/hooks/use-issues';
+import { useAdminDashboard } from '@/hooks/use-admin';
+import { RouteGuard } from '@/components/shared/route-guard';
+import { PageSkeleton } from '@/components/shared/loading-skeleton';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Stat } from '@/components/ui/stat';
-import { StatusBadge, CategoryBadge } from '@/components/ui/badge';
-import { Avatar } from '@/components/ui/avatar';
+import { StatusBadge } from '@/components/ui/badge';
 import { Icon } from '@/components/ui/icon';
-import { IssueRow } from '@/components/issues/issue-row';
+import type { ApiIssue } from '@/hooks/use-issues';
 
 export default function DashboardPage() {
-  const { role, votes, handleVote } = useApp();
-  const router = useRouter();
-  const me = role === 'admin' ? 's1' : 'u1';
-  const myIssues = ISSUES.filter(i => role === 'admin' ? i.assignee === me : i.reporter === me);
-  const trending = [...ISSUES]
-    .sort((a, b) => (b.upvotes + (votes[b.id] || 0)) - (a.upvotes + (votes[a.id] || 0)))
-    .slice(0, 5);
-  const recentlyResolved = ISSUES.filter(i => i.status === 'resolved').slice(0, 3);
+  return (
+    <RouteGuard>
+      <DashboardContent />
+    </RouteGuard>
+  );
+}
 
-  const studentStats = [
-    { label: 'Open across campus', value: ISSUES.filter(i => i.status === 'open').length, delta: '+4', deltaDir: 'up' as const, hint: 'vs last week' },
-    { label: 'Your reports', value: myIssues.length, delta: '2 active', deltaDir: '' as const, hint: '' },
-    { label: 'Resolved this week', value: 18, delta: '+22%', deltaDir: 'up' as const, hint: '' },
-    { label: 'Avg. response', value: '9h', delta: '−3h', deltaDir: 'down' as const, hint: 'from 12h' },
-  ];
-  const adminStats = [
-    { label: 'Unassigned queue', value: ISSUES.filter(i => !i.assignee && i.status !== 'resolved' && i.status !== 'closed').length, delta: 'Needs triage', deltaDir: '' as const, hint: '' },
-    { label: 'Assigned to you', value: myIssues.filter(i => i.status !== 'resolved' && i.status !== 'closed').length, delta: '3 high priority', deltaDir: 'up' as const, hint: '' },
-    { label: 'Closed this week', value: 18, delta: 'On track', deltaDir: 'up' as const, hint: '' },
-    { label: 'Avg. resolution', value: '2.4d', delta: '−0.6d', deltaDir: 'down' as const, hint: 'vs target 3d' },
-  ];
-  const stats = role === 'admin' ? adminStats : studentStats;
+function DashboardContent() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const role = user ? getHighestRole(user.roles) : 'student';
+  const isAdmin = role === 'institution_admin' || role === 'portal_admin';
+
+  // Fetch trending issues (top 5 by votes)
+  const { data: trendingData, isLoading: trendingLoading, error: trendingError, refetch: refetchTrending } = useIssues({ sort: 'votes', limit: 5 });
+
+  // Fetch user's own issues (reports for students, assigned for admins)
+  const myIssuesParams = isAdmin
+    ? { status: 'open', limit: 4 }
+    : { limit: 4 };
+  const { data: myIssuesData, isLoading: myIssuesLoading, error: myIssuesError, refetch: refetchMyIssues } = useIssues(myIssuesParams);
+
+  // Admin dashboard stats
+  const { data: adminData, isLoading: adminLoading, error: adminError, refetch: refetchAdmin } = useAdminDashboard();
+
+  // Fetch open issues count for student stats
+  const { data: openIssuesData, isLoading: openLoading } = useIssues({ status: 'open', limit: 1 });
+
+  const isLoading = trendingLoading || myIssuesLoading || (isAdmin && adminLoading) || (!isAdmin && openLoading);
+  const hasError = trendingError || myIssuesError || (isAdmin && adminError);
+
+  if (isLoading) {
+    return <PageSkeleton />;
+  }
+
+  if (hasError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '80px 20px', textAlign: 'center' }}>
+        <Icon name="alert" size={40} style={{ color: 'var(--danger)' }} />
+        <h2 style={{ fontSize: 18, fontWeight: 600 }}>Something went wrong</h2>
+        <p style={{ color: 'var(--fg-muted)', fontSize: 14 }}>We couldn&apos;t load your dashboard data. Please try again.</p>
+        <Button variant="primary" icon="swap" onClick={() => { refetchTrending(); refetchMyIssues(); if (isAdmin) refetchAdmin(); }}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  const trending = trendingData?.items ?? [];
+  const myIssues = myIssuesData?.items ?? [];
+  const totalOpen = openIssuesData?.total ?? 0;
+
+  // Build stats based on role
+  const stats = isAdmin
+    ? [
+        { label: 'Unassigned queue', value: Number(adminData?.totals?.total ?? 0) - Number(adminData?.totals?.resolved ?? 0), delta: 'Needs triage', deltaDir: '' as const, hint: '' },
+        { label: 'Assigned to you', value: myIssues.filter(i => i.status !== 'resolved' && i.status !== 'closed').length, delta: '', deltaDir: '' as const, hint: '' },
+        { label: 'Closed this week', value: Number(adminData?.totals?.resolved ?? 0), delta: 'On track', deltaDir: 'up' as const, hint: '' },
+        { label: 'Avg. resolution', value: '—', delta: '', deltaDir: '' as const, hint: '' },
+      ]
+    : [
+        { label: 'Open across campus', value: totalOpen, delta: '', deltaDir: '' as const, hint: '' },
+        { label: 'Your reports', value: myIssuesData?.total ?? 0, delta: `${myIssues.filter(i => i.status === 'open' || i.status === 'in_progress').length} active`, deltaDir: '' as const, hint: '' },
+        { label: 'Resolved this week', value: String(adminData?.totals?.resolved ?? 0), delta: '', deltaDir: '' as const, hint: '' },
+        { label: 'Avg. response', value: '—', delta: '', deltaDir: '' as const, hint: '' },
+      ];
+
+  const userName = user?.name?.split(' ')[0] ?? 'there';
 
   return (
     <div>
       <div className="page-head">
         <div>
           <h1 className="page-title">
-            {role === 'admin' ? 'Good morning, Vikram.' : 'Hey Aarav,'}{' '}
+            {isAdmin ? `Good morning, ${userName}.` : `Hey ${userName},`}{' '}
             <span style={{ color: 'var(--fg-subtle)', fontStyle: 'italic' }}>
-              {role === 'admin' ? '12 things to look at.' : 'anything broken?'}
+              {isAdmin ? `${Number(adminData?.totals?.total ?? 0) - Number(adminData?.totals?.resolved ?? 0)} things to look at.` : 'anything broken?'}
             </span>
           </h1>
           <p className="page-sub">
-            {role === 'admin'
+            {isAdmin
               ? "A quick view of what's open, who's working on what, and where to focus today."
               : "What students are saying, and what's been fixed since you last logged in."}
           </p>
         </div>
-        {role !== 'admin' ? (
+        {!isAdmin ? (
           <Button variant="accent" icon="plus" onClick={() => router.push('/issues/new')}>Report an issue</Button>
         ) : (
           <Button variant="primary" icon="shield" onClick={() => router.push('/admin/kanban')}>Open triage queue</Button>
@@ -66,27 +114,25 @@ export default function DashboardPage() {
       <div className="g g-3">
         <Card
           className="col-2"
-          title={role === 'admin' ? 'Trending right now' : 'What\'s getting upvoted'}
-          sub={role === 'admin' ? 'Issues with the most student support in the last 48 hours' : 'Show your support so staff prioritise the right things'}
+          title={isAdmin ? 'Trending right now' : "What's getting upvoted"}
+          sub={isAdmin ? 'Issues with the most student support' : 'Show your support so staff prioritise the right things'}
           action={<Button variant="ghost" size="sm" onClick={() => router.push('/issues')} iconRight="chevron-right">View all</Button>}
         >
           <div style={{ margin: '-6px -2px' }}>
-            {trending.map(issue => (
-              <IssueRow
-                key={issue.id}
-                issue={issue}
-                onClick={() => router.push(`/issues/${issue.id}`)}
-                onVote={handleVote}
-                voteBoost={votes[issue.id] || 0}
-              />
-            ))}
+            {trending.length === 0 ? (
+              <div style={{ padding: '12px 0', color: 'var(--fg-muted)', fontSize: 13 }}>No trending issues yet.</div>
+            ) : (
+              trending.map(issue => (
+                <TrendingIssueRow key={issue.id} issue={issue} onClick={() => router.push(`/issues/${issue.public_id || issue.id}`)} />
+              ))
+            )}
           </div>
         </Card>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card
-            title={role === 'admin' ? 'Your queue' : 'Your reports'}
-            sub={role === 'admin' ? 'Assigned to you' : 'Issues you\'ve opened'}
+            title={isAdmin ? 'Your queue' : 'Your reports'}
+            sub={isAdmin ? 'Assigned to you' : "Issues you've opened"}
           >
             {myIssues.length === 0 ? (
               <div style={{ padding: '12px 0', color: 'var(--fg-muted)', fontSize: 13 }}>Nothing here yet.</div>
@@ -96,13 +142,13 @@ export default function DashboardPage() {
                   <div
                     key={issue.id}
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}
-                    onClick={() => router.push(`/issues/${issue.id}`)}
+                    onClick={() => router.push(`/issues/${issue.public_id || issue.id}`)}
                   >
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.3, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
                         {issue.title}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--fg-subtle)', fontFamily: 'var(--font-mono)' }}>{issue.id}</div>
+                      <div style={{ fontSize: 11, color: 'var(--fg-subtle)', fontFamily: 'var(--font-mono)' }}>{issue.public_id || issue.id}</div>
                     </div>
                     <StatusBadge status={issue.status} />
                   </div>
@@ -111,90 +157,56 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <Card title="Recently resolved" sub="Wins worth celebrating">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {recentlyResolved.map(issue => (
-                <div key={issue.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <div style={{ width: 22, height: 22, borderRadius: 999, background: 'var(--success-soft)', color: 'var(--success)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                    <Icon name="check" size={13} stroke={2.4} />
-                  </div>
-                  <div style={{ fontSize: 12.5, lineHeight: 1.4 }}>
-                    <div style={{ fontWeight: 500, color: 'var(--fg)' }}>{issue.title}</div>
-                    <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginTop: 2 }}>
-                      Fixed by {issue.assignee ? peopleById[issue.assignee]?.name : 'Staff'}
-                    </div>
-                  </div>
-                </div>
-              ))}
+          <Card title="This week" sub="Issues opened vs resolved">
+            <div style={{ display: 'flex', gap: 24, padding: '8px 0' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{isAdmin ? Number(adminData?.totals?.total ?? 0) : totalOpen}</div>
+                <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Open</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--success)' }}>{String(adminData?.totals?.resolved ?? 0)}</div>
+                <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Resolved</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--fg)' }}>{'—'}</div>
+                <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>In progress</div>
+              </div>
             </div>
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="g g-3" style={{ marginTop: 22 }}>
-        <Card title="Categories" sub="Tap to filter the issues list">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {CATEGORIES.slice(0, 8).map(c => {
-              const count = ISSUES.filter(i => i.category === c.id).length;
-              return (
-                <button key={c.id} className="chip" onClick={() => router.push('/issues')}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: c.color }} />
-                  {c.label}
-                  <span style={{ color: 'var(--fg-subtle)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{count}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Card>
+/** Compact issue row for the trending section */
+function TrendingIssueRow({ issue, onClick }: { issue: ApiIssue; onClick: () => void }) {
+  return (
+    <div className="issue-row" onClick={onClick} style={{ cursor: 'pointer' }}>
+      <div className="upvote">
+        <Icon name="arrow-up" size={12} stroke={2.4} />
+        <span className="upvote-count">{issue.votes}</span>
+      </div>
 
-        <Card title="This week at a glance" sub="Issues opened vs resolved" className="col-2">
-          <MiniSparkline />
-        </Card>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="issue-title">{issue.title}</div>
+        <div className="issue-meta">
+          <span className="mono">{issue.public_id || issue.id}</span>
+          {issue.category && (
+            <>
+              <span className="dot-sep" />
+              <span>{issue.category.name}</span>
+            </>
+          )}
+          <span className="dot-sep" />
+          <Icon name="msg" size={11} />
+          <span>{issue.comments_count}</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <StatusBadge status={issue.status} />
       </div>
     </div>
-  );
-}
-
-function MiniSparkline() {
-  const data = [
-    { day: 'Mon', opened: 5,  resolved: 3 },
-    { day: 'Tue', opened: 8,  resolved: 5 },
-    { day: 'Wed', opened: 6,  resolved: 7 },
-    { day: 'Thu', opened: 11, resolved: 6 },
-    { day: 'Fri', opened: 9,  resolved: 10 },
-    { day: 'Sat', opened: 4,  resolved: 6 },
-    { day: 'Sun', opened: 3,  resolved: 4 },
-  ];
-
-  return (
-    <div style={{ height: 220 }}>
-      <AreaChart data={data} />
-    </div>
-  );
-}
-
-function AreaChart({ data }: { data: { day: string; opened: number; resolved: number }[] }) {
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <RAreaChart data={data}>
-        <defs>
-          <linearGradient id="gradOpened" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.15} />
-            <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="gradResolved" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--success)" stopOpacity={0.1} />
-            <stop offset="95%" stopColor="var(--success)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid stroke="var(--border)" strokeDasharray="0" vertical={false} />
-        <XAxis dataKey="day" tick={{ fill: 'var(--fg-subtle)', fontSize: 11 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: 'var(--fg-subtle)', fontSize: 11 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={{ background: 'var(--bg-elev)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, color: 'var(--fg)' }} />
-        <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: 11, color: 'var(--fg-muted)', paddingTop: 8 }} />
-        <Area type="monotone" dataKey="opened" name="Opened" stroke="var(--accent)" fill="url(#gradOpened)" strokeWidth={2} dot={false} />
-        <Area type="monotone" dataKey="resolved" name="Resolved" stroke="var(--success)" fill="url(#gradResolved)" strokeWidth={2} dot={false} />
-      </RAreaChart>
-    </ResponsiveContainer>
   );
 }

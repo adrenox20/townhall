@@ -6,12 +6,11 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input, Textarea } from '@/components/ui/input';
-import { demoIssues } from '@/lib/api';
 
 export function NewIssueForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const suggestions = title.length > 10 ? demoIssues.slice(0, 2) : [];
+  const suggestions: never[] = [];
   return (
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <Card>
@@ -37,7 +36,7 @@ export function NewIssueForm() {
           <h2 className="flex items-center gap-2 text-lg font-semibold"><Search size={18} /> Duplicate check</h2>
         </CardHeader>
         <CardContent className="space-y-3">
-          {suggestions.length === 0 ? <p className="text-sm text-foreground/65">Suggestions appear as the issue becomes specific.</p> : suggestions.map((issue) => (
+          {suggestions.length === 0 ? <p className="text-sm text-foreground/65">Suggestions appear as the issue becomes specific.</p> : ([] as {id:string;title:string}[]).map((issue) => (
             <div key={issue.id} className="rounded-md border border-border p-3">
               <div className="flex items-center gap-2 text-sm font-medium"><AlertTriangle size={16} className="text-accent" /> Possible match</div>
               <div className="mt-1 text-sm">{issue.title}</div>

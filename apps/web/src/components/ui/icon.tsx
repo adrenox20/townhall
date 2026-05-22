@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
 
-interface IconProps extends SVGProps<SVGSVGElement> {
+interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'stroke'> {
   name: string;
   size?: number;
   stroke?: number;
@@ -54,6 +54,7 @@ export function Icon({ name, size = 16, stroke = 1.75, className = '', ...rest }
     case 'trending': return <svg {...props}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>;
     case 'alert': return <svg {...props}><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>;
     case 'sparkles': return <svg {...props}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.6 1.8L21.4 19l-1.8.6L19 21l-.6-1.4L17 19l1.4-.6z"/></svg>;
+    case 'log-out': return <svg {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
     case 'swap': return <svg {...props}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>;
     case 'thumbs-up': return <svg {...props}><path d="M14 9V5a3 3 0 0 0-6 0v4H4v11h12.3a3 3 0 0 0 3-2.3L21 12a3 3 0 0 0-3-3z"/></svg>;
     default: return <svg {...props}><circle cx="12" cy="12" r="9"/></svg>;

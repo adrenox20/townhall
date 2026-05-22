@@ -1,4 +1,41 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+'use client';
+
+import { RouteGuard } from '@/components/shared/route-guard';
+import { PageShell } from '@/components/shared/page-shell';
+import { usePortalUsers } from '@/hooks/use-portal';
+
+function UsersContent() {
+  const { data, isLoading, error, refetch } = usePortalUsers();
+  return (
+    <PageShell title="User management" subtitle="University accounts and roles." isLoading={isLoading} error={error} onRetry={() => refetch()} isEmpty={!data?.length}>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <table className="w-full text-sm">
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <th style={{ padding: 12, textAlign: 'left' }}>Name</th>
+              <th style={{ padding: 12, textAlign: 'left' }}>Email</th>
+              <th style={{ padding: 12, textAlign: 'left' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data ?? []).map((u) => (
+              <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: 12 }}>{u.name}</td>
+                <td style={{ padding: 12 }}>{u.email}</td>
+                <td style={{ padding: 12 }}>{u.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </PageShell>
+  );
+}
+
 export default function PortalUsersPage() {
-  return <Card><CardHeader><h2 className="text-xl font-semibold">User and admin management</h2></CardHeader><CardContent><div className="grid gap-2 text-sm"><p>student@university.edu - student</p><p>ops@university.edu - institution_admin</p><p>admin@university.edu - portal_admin</p></div></CardContent></Card>;
+  return (
+    <RouteGuard requiredRole="portal_admin">
+      <UsersContent />
+    </RouteGuard>
+  );
 }

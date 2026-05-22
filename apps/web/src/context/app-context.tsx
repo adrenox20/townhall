@@ -1,8 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { NOTIFICATIONS as INITIAL_NOTIFICATIONS, ISSUES } from '@/lib/data';
-import type { Notification, Toast } from '@/lib/types';
+import type { Toast } from '@/lib/types';
 
 interface Tweaks {
   accent: string;
@@ -21,15 +20,6 @@ const ACCENT_PRESETS: Record<string, { light: string; dark: string }> = {
 };
 
 interface AppContextValue {
-  role: 'student' | 'admin';
-  setRole: (role: 'student' | 'admin') => void;
-  votes: Record<string, number>;
-  handleVote: (id: string) => void;
-  statusOverrides: Record<string, string>;
-  handleStatusChange: (id: string, status: string) => void;
-  notifications: Notification[];
-  handleMarkAllRead: () => void;
-  unreadCount: number;
   toasts: Toast[];
   pushToast: (text: string, icon?: string) => void;
   tweaks: Tweaks;
@@ -39,10 +29,6 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<'student' | 'admin'>('student');
-  const [votes, setVotes] = useState<Record<string, number>>({});
-  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({});
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [tweaks, setTweaks] = useState<Tweaks>({
     accent: 'indigo',
@@ -74,30 +60,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, [tweaks.accent]);
 
-  const handleVote = useCallback((id: string) => {
-    setVotes(v => {
-      const issue = ISSUES.find(i => i.id === id);
-      if (!issue) return v;
-      const next = { ...v };
-      const already = issue.votedByMe ? (next[id] ?? 0) >= 0 : (next[id] ?? 0) > 0;
-      next[id] = already ? (issue.votedByMe ? -1 : 0) : (issue.votedByMe ? 0 : 1);
-      return next;
-    });
-  }, []);
-
-  const handleStatusChange = useCallback((id: string, status: string) => {
-    setStatusOverrides(s => ({ ...s, [id]: status }));
-    const label = { open: 'Open', progress: 'In Progress', resolved: 'Resolved', closed: 'Closed' }[status] ?? status;
-    pushToast(`Moved ${id} to ${label}`, 'check');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleMarkAllRead = useCallback(() => {
-    setNotifications(ns => ns.map(n => ({ ...n, unread: false })));
-    pushToast('All caught up', 'check');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const pushToast = useCallback((text: string, icon = 'check') => {
     const id = Date.now() + Math.random();
     setToasts(t => [...t, { id, text, icon }]);
@@ -108,14 +70,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTweaks(t => ({ ...t, [key]: value }));
   }, []);
 
-  const unreadCount = notifications.filter(n => n.unread).length;
-
   return (
     <AppContext.Provider value={{
-      role, setRole,
-      votes, handleVote,
-      statusOverrides, handleStatusChange,
-      notifications, handleMarkAllRead, unreadCount,
       toasts, pushToast,
       tweaks, setTweak,
     }}>

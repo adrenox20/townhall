@@ -1,4 +1,28 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+'use client';
+
+import { RouteGuard } from '@/components/shared/route-guard';
+import { PageShell } from '@/components/shared/page-shell';
+import { usePortalModeration } from '@/hooks/use-portal';
+
+function ModerationContent() {
+  const { data, isLoading, error, refetch } = usePortalModeration();
+  return (
+    <PageShell title="Moderation" subtitle="Reported content queue." isLoading={isLoading} error={error} onRetry={() => refetch()} isEmpty={!data?.length} emptyMessage="Moderation queue is empty.">
+      <div className="space-y-3">
+        {(data ?? []).map((row) => (
+          <div key={String(row.id)} className="card" style={{ padding: 14 }}>
+            <pre className="text-xs overflow-auto">{JSON.stringify(row, null, 2)}</pre>
+          </div>
+        ))}
+      </div>
+    </PageShell>
+  );
+}
+
 export default function PortalModerationPage() {
-  return <Card><CardHeader><h2 className="text-xl font-semibold">Moderation center</h2></CardHeader><CardContent className="space-y-2 text-sm"><p>Reported issues</p><p>Hidden comments</p><p>Suspended user review</p></CardContent></Card>;
+  return (
+    <RouteGuard requiredRole="portal_admin">
+      <ModerationContent />
+    </RouteGuard>
+  );
 }

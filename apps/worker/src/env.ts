@@ -24,12 +24,14 @@ export type Env = {
   ISSUE_ROOMS: DurableObjectNamespace;
   NOTIFICATION_HUB: DurableObjectNamespace;
   JWT_SECRET: string;
-  GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   EMAIL_FROM?: string;
   RESEND_API_KEY?: string;
   FRONTEND_URL: string;
+  /** Comma-separated, e.g. rishihood.edu.in,nst.rishihood.edu.in */
+  ALLOWED_EMAIL_DOMAINS?: string;
   ALLOWED_EMAIL_DOMAIN: string;
+  GOOGLE_CLIENT_ID: string;
   SESSION_TTL_SECONDS: string;
   ISSUE_EDIT_WINDOW_MINUTES: string;
   DUPLICATE_LIKELY_THRESHOLD: string;

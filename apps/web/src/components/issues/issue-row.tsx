@@ -1,5 +1,4 @@
 import type { Issue } from '@/lib/types';
-import { peopleById } from '@/lib/data';
 import { Icon } from '@/components/ui/icon';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusBadge, CategoryBadge } from '@/components/ui/badge';
@@ -12,7 +11,7 @@ interface IssueRowProps {
 }
 
 export function IssueRow({ issue, onClick, onVote, voteBoost = 0 }: IssueRowProps) {
-  const reporter = peopleById[issue.reporter];
+  const reporter = issue.reporter;
   const voted = issue.votedByMe ? voteBoost >= 0 : voteBoost > 0;
   const count = issue.upvotes + voteBoost;
 
@@ -31,7 +30,7 @@ export function IssueRow({ issue, onClick, onVote, voteBoost = 0 }: IssueRowProp
         <div className="issue-meta">
           <span className="mono">{issue.id}</span>
           <span className="dot-sep" />
-          <CategoryBadge id={issue.category} />
+          <CategoryBadge name={issue.category} />
           <span className="dot-sep" />
           <Icon name="map-pin" size={11} />
           <span>{issue.location}</span>
@@ -45,7 +44,7 @@ export function IssueRow({ issue, onClick, onVote, voteBoost = 0 }: IssueRowProp
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <StatusBadge status={issue.status} />
-        <Avatar person={reporter} size="sm" />
+        <span className="avatar avatar--sm">{String(reporter).slice(0,2).toUpperCase()}</span>
       </div>
     </div>
   );

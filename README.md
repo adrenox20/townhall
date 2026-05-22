@@ -22,13 +22,15 @@ npm run dev:worker
 npm run dev:web
 ```
 
+Production site: **https://rutownhall.live** — see [DEPLOY.md](DEPLOY.md).
+
 Set Worker secrets before deploying:
 
 ```bash
 wrangler secret put JWT_SECRET --config apps/worker/wrangler.toml
-wrangler secret put GOOGLE_CLIENT_ID --config apps/worker/wrangler.toml
-wrangler secret put GOOGLE_CLIENT_SECRET --config apps/worker/wrangler.toml
 ```
+
+`GOOGLE_CLIENT_ID` and allowed email domains are configured in `apps/worker/wrangler.toml`. Frontend production env: `apps/web/.env.production`.
 
 Optional email delivery uses `RESEND_API_KEY` and `EMAIL_FROM`.
 

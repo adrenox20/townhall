@@ -25,7 +25,7 @@ export function IssueCard({ issue }: { issue: IssueCardData }) {
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{issue.public_id}</Badge>
             <Badge>{statusLabels[issue.status] || issue.status}</Badge>
-            <Badge className={issue.urgency === 'critical' ? 'border-danger text-danger' : ''}>{issue.urgency}</Badge>
+            <Badge variant={issue.urgency === 'critical' ? 'danger' : ''}>{issue.urgency}</Badge>
           </div>
           <h3 className="text-base font-semibold">{issue.title}</h3>
           <div className="flex flex-wrap items-center gap-3 text-sm text-foreground/65">

@@ -14,7 +14,8 @@ export async function signSession(c: AppContext, userId: string) {
   await c.env.KV.put(`session:${token}`, userId, { expirationTtl: ttl });
   await c.env.DB.prepare('INSERT INTO auth_sessions (id, user_id, expires_at, ip, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(id('sess'), userId, new Date(Date.now() + ttl * 1000).toISOString(), c.req.header('CF-Connecting-IP') || null, c.req.header('User-Agent') || null, now()).run();
-  setCookie(c, 'session', token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: ttl });
+  const secure = (c.env.FRONTEND_URL || '').startsWith('https://');
+  setCookie(c, 'session', token, { httpOnly: true, secure, sameSite: 'Lax', path: '/', maxAge: ttl });
   return token;
 }
 
@@ -22,8 +23,31 @@ export function clearSession(c: AppContext) {
   deleteCookie(c, 'session', { path: '/' });
 }
 
+/** Comma-separated domains in env; also matches subdomains (e.g. user@dept.rishihood.edu.in). */
+export function parseAllowedEmailDomains(domainsConfig: string): string[] {
+  return domainsConfig
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function assertAllowedEmail(email: string, domainsConfig: string): boolean {
+  const host = email.split('@')[1]?.toLowerCase();
+  if (!host) return false;
+  const domains = parseAllowedEmailDomains(domainsConfig);
+  return domains.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+/** @deprecated Use assertAllowedEmail with ALLOWED_EMAIL_DOMAINS */
 export function assertAllowedDomain(email: string, domain: string) {
-  return email.toLowerCase().endsWith(`@${domain.toLowerCase()}`);
+  return assertAllowedEmail(email, domain);
+}
+
+export function getAllowedEmailDomainsFromEnv(env: {
+  ALLOWED_EMAIL_DOMAINS?: string;
+  ALLOWED_EMAIL_DOMAIN: string;
+}): string {
+  return env.ALLOWED_EMAIL_DOMAINS || env.ALLOWED_EMAIL_DOMAIN;
 }
 
 export async function upsertUser(c: AppContext, email: string, name?: string) {

@@ -64,6 +64,7 @@ INSERT OR IGNORE INTO tags (id, name, slug) VALUES
 
 INSERT OR REPLACE INTO platform_settings (key, value, updated_at) VALUES
   ('allowed_email_domain', 'rishihood.edu.in', datetime('now')),
+  ('allowed_email_domains', 'rishihood.edu.in,nst.rishihood.edu.in', datetime('now')),
   ('duplicate_likely_threshold', '0.78', datetime('now')),
   ('duplicate_related_threshold', '0.55', datetime('now')),
   ('issue_edit_window_minutes', '30', datetime('now'));

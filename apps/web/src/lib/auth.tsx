@@ -1,22 +1,91 @@
 'use client';
 
-import { createContext, useContext } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import type { SessionUser } from './permissions';
+import { api } from './api';
 
-const demoUser: SessionUser = {
-  id: 'user_demo',
-  email: 'student@university.edu',
-  name: 'Aarav Mehta',
-  status: 'active',
-  roles: ['student', 'institution_admin', 'portal_admin'],
-  permissions: [
-    'issue:create','issue:read_public','issue:update_own','issue:update_any','issue:delete_own_pre_review',
-    'issue:status_update','issue:assign','issue:merge','issue:archive','comment:create','comment:moderate',
-    'solution:create','solution:review','solution:official_select','analytics:institution_read','analytics:platform_read',
-    'settings:manage','rbac:manage','audit:read','user:suspend','admin:manage'
-  ]
-};
+interface AuthContextValue {
+  user: SessionUser | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  loginWithGoogle: (idToken: string) => Promise<SessionUser>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
+}
 
-const AuthContext = createContext<{ user: SessionUser | null }>({ user: demoUser });
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => <AuthContext.Provider value={{ user: demoUser }}>{children}</AuthContext.Provider>;
+const AuthContext = createContext<AuthContextValue>({
+  user: null,
+  isLoading: true,
+  isAuthenticated: false,
+  loginWithGoogle: async () => { throw new Error('AuthProvider missing'); },
+  logout: async () => {},
+  refresh: async () => {},
+});
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const isAuthenticated = user !== null;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function restoreSession() {
+      try {
+        const me = await api<SessionUser>('/auth/me');
+        if (!cancelled) setUser(me);
+      } catch {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    restoreSession();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+    const isPublic = pathname === '/login' || pathname === '/';
+    if (!isAuthenticated && !isPublic) {
+      router.replace('/login');
+    }
+  }, [isLoading, isAuthenticated, pathname, router]);
+
+  const loginWithGoogle = useCallback(async (idToken: string): Promise<SessionUser> => {
+    await api<{ token: string }>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    });
+    const me = await api<SessionUser>('/auth/me');
+    setUser(me);
+    return me;
+  }, []);
+
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      await api<{ loggedOut: boolean }>('/auth/logout', { method: 'POST' });
+    } catch {
+      // clear local state even if API fails
+    }
+    setUser(null);
+    router.push('/login');
+  }, [router]);
+
+  const refresh = useCallback(async (): Promise<void> => {
+    await api<{ token: string }>('/auth/refresh', { method: 'POST' });
+    const me = await api<SessionUser>('/auth/me');
+    setUser(me);
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated, loginWithGoogle, logout, refresh }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
 export const useAuth = () => useContext(AuthContext);
