@@ -38,7 +38,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const me = await api<SessionUser>('/auth/me');
         if (!cancelled) setUser(me);
       } catch {
-        if (!cancelled) setUser(null);
+        if (!cancelled) {
+          setUser(null);
+          localStorage.removeItem('auth_token');
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -56,10 +59,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [isLoading, isAuthenticated, pathname, router]);
 
   const loginWithGoogle = useCallback(async (idToken: string): Promise<SessionUser> => {
-    await api<{ token: string }>('/auth/google', {
+    const res = await api<{ token: string }>('/auth/google', {
       method: 'POST',
       body: JSON.stringify({ idToken }),
     });
+    if (res.token) {
+      localStorage.setItem('auth_token', res.token);
+    }
     const me = await api<SessionUser>('/auth/me');
     setUser(me);
     return me;
@@ -71,12 +77,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // clear local state even if API fails
     }
+    localStorage.removeItem('auth_token');
     setUser(null);
     router.push('/login');
   }, [router]);
 
   const refresh = useCallback(async (): Promise<void> => {
-    await api<{ token: string }>('/auth/refresh', { method: 'POST' });
+    const res = await api<{ token: string }>('/auth/refresh', { method: 'POST' });
+    if (res.token) {
+      localStorage.setItem('auth_token', res.token);
+    }
     const me = await api<SessionUser>('/auth/me');
     setUser(me);
   }, []);
