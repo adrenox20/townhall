@@ -139,18 +139,6 @@ export default function LoginPage() {
               <br />(including Rishihood subdomains).
             </p>
 
-            <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                { icon: "🔒", text: "Your identity is protected — report anonymously if needed" },
-                { icon: "📊", text: "Track every issue from submission to resolution" },
-                { icon: "🔔", text: "Get notified when your issue is updated" },
-              ].map((item) => (
-                <div key={item.text} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 14, lineHeight: 1.5 }}>{item.icon}</span>
-                  <span style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>{item.text}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>
