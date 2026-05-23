@@ -1,0 +1,8 @@
+# Copy this file to .dev.vars for local development.
+# .dev.vars is gitignored — never commit real secrets.
+
+JWT_SECRET=a-long-random-string-for-local-dev-only
+
+# Optional: email delivery via Resend
+# RESEND_API_KEY=re_xxxxxxxxxxxx
+# EMAIL_FROM=noreply@yourdomain.com

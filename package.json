@@ -11,10 +11,13 @@
     "dev:worker": "npm run dev --workspace @grievance/worker",
     "build": "npm run build --workspace @grievance/worker && npm run build --workspace @grievance/web",
     "typecheck": "npm run typecheck --workspace @grievance/worker && npm run typecheck --workspace @grievance/web",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,json}\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json}\"",
     "db:migrate:local": "npm run db:migrate:local --workspace @grievance/worker",
     "db:seed:local": "npm run db:seed:local --workspace @grievance/worker"
   },
   "devDependencies": {
+    "prettier": "^3.4.2",
     "typescript": "^5.7.3"
   }
 }

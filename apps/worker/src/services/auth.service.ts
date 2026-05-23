@@ -1,6 +1,6 @@
 import { SignJWT } from 'jose';
 import type { Context } from 'hono';
-import { setCookie, deleteCookie } from 'hono/cookie';
+import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
 import type { Env, Variables } from '../env';
 import { id } from '../utils/ids';
 import { now } from '../utils/dates';
@@ -9,7 +9,8 @@ type AppContext = Context<{ Bindings: Env; Variables: Variables }>;
 
 export async function signSession(c: AppContext, userId: string) {
   const ttl = Number(c.env.SESSION_TTL_SECONDS || 604800);
-  const key = new TextEncoder().encode(c.env.JWT_SECRET || 'dev-secret-change-me');
+  if (!c.env.JWT_SECRET) throw new Error('JWT_SECRET is not configured. Set it with: wrangler secret put JWT_SECRET');
+  const key = new TextEncoder().encode(c.env.JWT_SECRET);
   const token = await new SignJWT({ typ: 'session' }).setProtectedHeader({ alg: 'HS256' }).setSubject(userId).setIssuedAt().setExpirationTime(`${ttl}s`).sign(key);
   await c.env.KV.put(`session:${token}`, userId, { expirationTtl: ttl });
   await c.env.DB.prepare('INSERT INTO auth_sessions (id, user_id, expires_at, ip, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -19,7 +20,12 @@ export async function signSession(c: AppContext, userId: string) {
   return token;
 }
 
-export function clearSession(c: AppContext) {
+export async function clearSession(c: AppContext) {
+  const token = getCookie(c, 'session');
+  if (token) {
+    // Revoke the KV entry so the token cannot be replayed until TTL expiry
+    await c.env.KV.delete(`session:${token}`);
+  }
   deleteCookie(c, 'session', { path: '/' });
 }
 

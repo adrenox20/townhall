@@ -6,7 +6,8 @@ import { getUserWithPermissions } from '../db/queries';
 import { appError } from './errors';
 
 async function verifyToken(secret: string, token: string) {
-  const key = new TextEncoder().encode(secret || 'dev-secret-change-me');
+  if (!secret) throw appError('CONFIG_ERROR', 'JWT_SECRET is not configured', 500);
+  const key = new TextEncoder().encode(secret);
   const { payload } = await jwtVerify(token, key);
   return payload.sub;
 }
