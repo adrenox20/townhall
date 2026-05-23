@@ -21,6 +21,8 @@ interface UploadedFile {
   key: string;
   name: string;
   url: string;
+  contentType: string;
+  sizeBytes: number;
 }
 
 interface FormErrors {
@@ -131,7 +133,7 @@ export default function NewIssuePage() {
           credentials: 'include',
         });
 
-        setAttachments((prev) => [...prev, { key, name: file.name, url: uploadUrl }]);
+        setAttachments((prev) => [...prev, { key, name: file.name, url: uploadUrl, contentType: file.type, sizeBytes: file.size }]);
       } catch {
         setUploadError(`Failed to upload ${file.name}.`);
       }
@@ -160,6 +162,12 @@ export default function NewIssuePage() {
         urgency,
         isAnonymous,
         ...(categoryId && { category_id: categoryId }),
+        attachments: attachments.map(a => ({
+          key: a.key,
+          filename: a.name,
+          contentType: a.contentType,
+          sizeBytes: a.sizeBytes,
+        })),
       },
       {
         onSuccess: (result) => {

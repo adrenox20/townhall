@@ -16,6 +16,24 @@ uploadRoutes.put('/direct/:key{.+}', async (c) => {
   await c.env.R2.put(c.req.param('key'), c.req.raw.body);
   return ok(c, { uploaded: true });
 });
+// Serve a file from R2 — authenticated, streams with correct content-type
+uploadRoutes.get('/serve/:key{.+}', async (c) => {
+  const key = c.req.param('key');
+  const object = await c.env.R2.get(key);
+  if (!object) return c.json({ error: 'Not found' }, 404);
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('cache-control', 'private, max-age=3600');
+  // Force inline display for images and video; attachment download for PDFs
+  const ct = object.httpMetadata?.contentType ?? '';
+  if (ct.startsWith('image/') || ct.startsWith('video/')) {
+    headers.set('content-disposition', 'inline');
+  } else {
+    const filename = key.split('/').pop() ?? 'file';
+    headers.set('content-disposition', `attachment; filename="${filename}"`);
+  }
+  return new Response(object.body, { headers });
+});
 uploadRoutes.delete('/:key{.+}', async (c) => {
   await c.env.R2.delete(c.req.param('key'));
   return ok(c, { deleted: true });

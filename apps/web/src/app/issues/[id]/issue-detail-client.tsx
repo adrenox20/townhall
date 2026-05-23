@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
-import { statusLabels, statuses } from '@/lib/constants';
+import { statusLabels, allStatuses } from '@/lib/constants';
 import { useIssue, useIssues, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, useVoteIssue, useMergeIssue, useDeleteIssue } from '@/hooks/use-issues';
 import type { ApiIssue } from '@/hooks/use-issues';
 import { useComments, useCreateComment, useUpdateComment } from '@/hooks/use-comments';
@@ -25,8 +25,6 @@ function getInitials(name: string): string {
   if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-
-const VISIBLE_STATUSES = statuses;
 
 /* ── Merge Modal ─────────────────────────────────────────────────────────── */
 function MergeModal({
@@ -769,27 +767,44 @@ function IssueDetailContent() {
             <Card>
               <CardHeader><h2 className="font-semibold">Status</h2></CardHeader>
               <CardContent>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--fg-subtle)' }}>Current</span>
-                    <Badge variant={issue.status as never}>{statusLabels[issue.status] || issue.status}</Badge>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Badge variant={issue.status as never} style={{ alignSelf: 'flex-start', fontSize: 12, padding: '4px 10px' }}>
+                    {statusLabels[issue.status] || issue.status}
+                  </Badge>
                   {canUpdateStatus && (
-                    <div>
-                      <div style={{ fontSize: 11.5, color: 'var(--fg-subtle)', marginBottom: 6 }}>Move to</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                        {VISIBLE_STATUSES.map((s) => (
-                          <button
-                            key={s}
-                            className={`chip${issue.status === s ? ' active' : ''}`}
-                            style={{ justifyContent: 'center', fontSize: 11 }}
-                            onClick={() => handleStatusChange(s)}
-                            disabled={updateStatus.isPending || issue.status === s}
-                          >
+                    <div style={{ position: 'relative' }}>
+                      <select
+                        value={issue.status}
+                        onChange={(e) => handleStatusChange(e.target.value)}
+                        disabled={updateStatus.isPending}
+                        style={{
+                          width: '100%',
+                          appearance: 'none',
+                          WebkitAppearance: 'none',
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          padding: '8px 32px 8px 12px',
+                          fontSize: 13,
+                          color: 'var(--fg)',
+                          cursor: updateStatus.isPending ? 'not-allowed' : 'pointer',
+                          outline: 'none',
+                          opacity: updateStatus.isPending ? 0.6 : 1,
+                        }}
+                        aria-label="Change status"
+                      >
+                        {allStatuses.map((s) => (
+                          <option key={s} value={s}>
                             {statusLabels[s] || s}
-                          </button>
+                          </option>
                         ))}
-                      </div>
+                      </select>
+                      <span style={{
+                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                        pointerEvents: 'none', color: 'var(--fg-subtle)',
+                      }}>
+                        <Icon name="chevron-down" size={14} />
+                      </span>
                     </div>
                   )}
                 </div>

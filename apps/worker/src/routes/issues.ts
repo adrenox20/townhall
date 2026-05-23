@@ -24,6 +24,12 @@ const writeIssue = z.object({
   isAnonymous: z.boolean().default(false),
   is_anonymous: z.boolean().optional(),
   tags: z.array(z.string()).default([]),
+  attachments: z.array(z.object({
+    key: z.string(),
+    filename: z.string(),
+    contentType: z.string(),
+    sizeBytes: z.number(),
+  })).default([]),
 });
 
 issueRoutes.use('*', requireAuth());
@@ -114,6 +120,14 @@ issueRoutes.post('/', requirePermission('issue:create'), zValidator('json', writ
     .bind(id('rel'), issueId, candidate.id, candidate.recommendation, candidate.score, now()).run();
   await c.env.DB.prepare('INSERT INTO activity_events (id, issue_id, actor_id, type, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(id('act'), issueId, user.id, 'issue_created', 'Issue submitted for review', now()).run();
+
+  // Persist attachment records — files are already in R2, we just link them to this issue
+  for (const att of body.attachments) {
+    await c.env.DB.prepare(
+      'INSERT INTO attachments (id, issue_id, uploader_id, r2_key, filename, content_type, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(id('att'), issueId, user.id, att.key, att.filename, att.contentType, att.sizeBytes, now()).run();
+  }
+
   return created(c, { id: issueId, public_id: publicId, similar });
 });
 
@@ -156,6 +170,12 @@ issueRoutes.get('/:id', async (c) => {
   };
 
   const isAnon = Boolean(issue.is_anonymous);
+
+  // Fetch attachments for this issue
+  const attachmentRows = await c.env.DB.prepare(
+    'SELECT id, r2_key, filename, content_type, size_bytes, created_at FROM attachments WHERE issue_id = ? ORDER BY created_at ASC'
+  ).bind(issue.id).all<{ id: string; r2_key: string; filename: string; content_type: string; size_bytes: number; created_at: string }>();
+
   return ok(c, {
     ...issue,
     // Strip identity for anonymous issues — author_id is retained internally for notifications
@@ -166,6 +186,15 @@ issueRoutes.get('/:id', async (c) => {
     category: parse(issue.category),
     department: parse(issue.department),
     merged_issues: (() => { try { const r = JSON.parse(issue.merged_issues as string); return Array.isArray(r) ? r : []; } catch { return []; } })(),
+    attachments: attachmentRows.results.map(a => ({
+      id: a.id,
+      filename: a.filename,
+      content_type: a.content_type,
+      size_bytes: a.size_bytes,
+      created_at: a.created_at,
+      // Serve URL — authenticated endpoint that streams from R2
+      url: `/api/v1/uploads/serve/${encodeURIComponent(a.r2_key)}`,
+    })),
   });
 });
 

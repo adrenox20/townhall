@@ -61,6 +61,14 @@ export interface ApiIssue {
     author_name: string | null;
     is_anonymous: number | boolean;
   }>;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    content_type: string;
+    size_bytes: number;
+    created_at: string;
+    url: string;
+  }>;
   sla_due_at: string | null;
   first_response_at: string | null;
   resolved_at: string | null;
