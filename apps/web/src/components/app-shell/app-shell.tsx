@@ -54,7 +54,7 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
 
       <aside className={`sidebar${mobileNavOpen ? ' sidebar--open' : ''}`}>
         <div className="brand">
-          <div className="brand-mark">R</div>
+          <img src="/logo.svg" alt="Campus Issues" className="brand-mark" style={{ padding: 0, objectFit: 'contain', background: 'transparent' }} />
           <div>
             <div className="brand-name">Campus Issues</div>
             <div className="brand-sub">Rishihood Univ.</div>

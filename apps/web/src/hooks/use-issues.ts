@@ -120,6 +120,7 @@ export function useUpdateIssueStatus() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['issues', id] });
+      queryClient.invalidateQueries({ queryKey: ['timeline'] });
     },
     onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update status', 'alert'); },
   });
@@ -134,8 +135,23 @@ export function useAssignIssue() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['issues', id] });
+      queryClient.invalidateQueries({ queryKey: ['timeline'] });
     },
     onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to assign issue', 'alert'); },
+  });
+}
+
+export function useMergeIssue() {
+  const queryClient = useQueryClient();
+  const { pushToast } = useApp();
+  return useMutation({
+    mutationFn: ({ id, mergedIssueId, reason }: { id: string; mergedIssueId: string; reason?: string }) =>
+      api<{ merged: boolean }>(`/issues/${id}/merge`, { method: 'POST', body: JSON.stringify({ mergedIssueId, reason }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+      pushToast('Issues merged successfully', 'check');
+    },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to merge issues', 'alert'); },
   });
 }
 

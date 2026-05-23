@@ -63,10 +63,9 @@ export default function LoginPage() {
           <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{
               width: 36, height: 36, borderRadius: 9,
-              background: "var(--bg)", color: "var(--fg)",
+              background: "transparent",
               display: "grid", placeItems: "center",
-              fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 400,
-            }}>R</div>
+            }}><img src="/logo.svg" alt="Campus Issues" style={{ width: 36, height: 36, objectFit: 'contain' }} /></div>
             <div>
               <div style={{ fontFamily: "var(--font-serif)", fontSize: 19, lineHeight: 1.1 }}>Campus Issues</div>
               <div style={{ fontSize: 10, opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 2 }}>

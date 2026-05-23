@@ -73,7 +73,7 @@ issueRoutes.post('/', requirePermission('issue:create'), zValidator('json', writ
   const category = body.categoryId ? await c.env.DB.prepare('SELECT sla_hours FROM categories WHERE id = ?').bind(body.categoryId).first<{ sla_hours: number }>() : null;
   await c.env.DB.prepare(
     `INSERT INTO issues (id, public_id, title, normalized_title, description, summary, category_id, department_id, author_id, status, urgency, is_anonymous, sla_due_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`
   ).bind(issueId, publicId, body.title, normalizeText(body.title), body.description, summary(body.description), body.categoryId || null, body.departmentId || null, user.id, body.urgency, body.isAnonymous ? 1 : 0, addHours(category?.sla_hours || 72), now(), now()).run();
   for (const tagId of body.tags) await c.env.DB.prepare('INSERT OR IGNORE INTO issue_tags (issue_id, tag_id) VALUES (?, ?)').bind(issueId, tagId).run();
   await c.env.DB.prepare('INSERT INTO issue_watchers (issue_id, user_id, created_at) VALUES (?, ?, ?)').bind(issueId, user.id, now()).run();
@@ -145,14 +145,18 @@ issueRoutes.delete('/:id', async (c) => {
 
 issueRoutes.patch('/:id/status', requirePermission('issue:status_update'), zValidator('json', z.object({ status: z.string(), note: z.string().optional() })), async (c) => {
   const body = c.req.valid('json');
-  const issue = await c.env.DB.prepare('SELECT status, author_id FROM issues WHERE id = ?').bind(c.req.param('id')).first<{ status: string; author_id: string }>();
+  const issueId = c.req.param('id');
+  const issue = await c.env.DB.prepare('SELECT status, author_id FROM issues WHERE id = ?').bind(issueId).first<{ status: string; author_id: string }>();
   if (!issue) return fail(c, 'NOT_FOUND', 'Issue not found', 404);
   if (!canTransition(issue.status, body.status)) return fail(c, 'INVALID_TRANSITION', 'Invalid workflow transition', 409);
+  const actor = c.get('user');
   await c.env.DB.prepare('UPDATE issues SET status = ?, first_response_at = COALESCE(first_response_at, ?), resolved_at = CASE WHEN ? = "resolved" THEN ? ELSE resolved_at END, updated_at = ? WHERE id = ?')
-    .bind(body.status, now(), body.status, now(), now(), c.req.param('id')).run();
+    .bind(body.status, now(), body.status, now(), now(), issueId).run();
   await c.env.DB.prepare('INSERT INTO issue_workflow_events (id, issue_id, actor_id, from_status, to_status, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(id('flow'), c.req.param('id'), c.get('user').id, issue.status, body.status, body.note || null, now()).run();
-  await audit(c, 'issue.status_update', 'issue', c.req.param('id'), { from: issue.status, to: body.status });
+    .bind(id('flow'), issueId, actor.id, issue.status, body.status, body.note || null, now()).run();
+  await c.env.DB.prepare('INSERT INTO activity_events (id, issue_id, actor_id, type, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(id('act'), issueId, actor.id, 'status_changed', `Status changed to ${body.status.replace(/_/g, ' ')}${body.note ? ': ' + body.note : ''}`, now()).run();
+  await audit(c, 'issue.status_update', 'issue', issueId, { from: issue.status, to: body.status });
   return ok(c, { status: body.status });
 });
 
@@ -160,9 +164,14 @@ issueRoutes.patch('/:id/assign', requirePermission('issue:assign'), zValidator('
   const body = c.req.valid('json');
   const assigneeId = body.assigneeId || body.assignee_id;
   if (!assigneeId) return fail(c, 'BAD_REQUEST', 'assigneeId is required', 400);
-  await c.env.DB.prepare('UPDATE issues SET assignee_id = ?, updated_at = ? WHERE id = ?').bind(assigneeId, now(), c.req.param('id')).run();
-  await c.env.DB.prepare('INSERT INTO issue_assignments (id, issue_id, assignee_id, actor_id, created_at) VALUES (?, ?, ?, ?, ?)').bind(id('asg'), c.req.param('id'), assigneeId, c.get('user').id, now()).run();
-  await audit(c, 'issue.assign', 'issue', c.req.param('id'), { assigneeId });
+  const issueId = c.req.param('id');
+  const actor = c.get('user');
+  const assignee = await c.env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(assigneeId).first<{ name: string }>();
+  await c.env.DB.prepare('UPDATE issues SET assignee_id = ?, updated_at = ? WHERE id = ?').bind(assigneeId, now(), issueId).run();
+  await c.env.DB.prepare('INSERT INTO issue_assignments (id, issue_id, assignee_id, actor_id, created_at) VALUES (?, ?, ?, ?, ?)').bind(id('asg'), issueId, assigneeId, actor.id, now()).run();
+  await c.env.DB.prepare('INSERT INTO activity_events (id, issue_id, actor_id, type, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(id('act'), issueId, actor.id, 'assigned', `Assigned to ${assignee?.name ?? assigneeId}`, now()).run();
+  await audit(c, 'issue.assign', 'issue', issueId, { assigneeId });
   return ok(c, { assigned: true });
 });
 

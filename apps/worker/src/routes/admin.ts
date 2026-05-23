@@ -7,6 +7,16 @@ import { ok } from '../utils/response';
 export const adminRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 adminRoutes.use('*', requireAuth(), requireAnyPermission(['analytics:institution_read', 'analytics:platform_read']));
 adminRoutes.get('/dashboard', async (c) => ok(c, await issueMetrics(c)));
+adminRoutes.get('/staff', async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT u.id, u.name, u.email FROM users u
+     INNER JOIN user_roles ur ON ur.user_id = u.id
+     WHERE ur.role_id IN ('role_institution_admin', 'role_portal_admin')
+     AND u.status = 'active'
+     ORDER BY u.name ASC`
+  ).all<{ id: string; name: string; email: string }>();
+  return ok(c, rows.results);
+});
 adminRoutes.get('/analytics', async (c) => ok(c, await issueMetrics(c)));
 adminRoutes.get('/sla', async (c) => ok(c, (await c.env.DB.prepare('SELECT * FROM issues WHERE sla_due_at < datetime("now") AND status NOT IN ("resolved", "archived", "rejected")').all()).results));
 adminRoutes.get('/issues', async (c) => ok(c, (await c.env.DB.prepare('SELECT * FROM issues WHERE is_deleted = 0 ORDER BY created_at DESC').all()).results));

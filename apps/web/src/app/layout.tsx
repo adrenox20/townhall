@@ -29,6 +29,11 @@ const jbMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'Campus Issues — Rishihood University',
   description: 'Report what\'s broken, upvote what matters, and watch progress in real time.',
+  icons: {
+    icon: '/logo.svg',
+    shortcut: '/logo.svg',
+    apple: '/logo.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

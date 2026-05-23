@@ -47,6 +47,20 @@ export function useAdminAnalytics() {
   });
 }
 
+export interface StaffUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export function useStaff() {
+  return useQuery({
+    queryKey: ['admin', 'staff'],
+    queryFn: () => api<StaffUser[]>('/admin/staff'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 import { statuses } from '@/lib/constants';
 
 export function groupKanbanColumns(issues: KanbanIssue[]) {
