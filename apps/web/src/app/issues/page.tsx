@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIssues, useVoteIssue } from '@/hooks/use-issues';
 import type { IssueFilters } from '@/hooks/use-issues';
+import { useAuth } from '@/lib/auth';
+import { getHighestRole } from '@/lib/roles';
 import { RouteGuard } from '@/components/shared/route-guard';
 import { SkeletonTable } from '@/components/shared/loading-skeleton';
 import { Button } from '@/components/ui/button';
@@ -14,6 +16,11 @@ import { statusLabels, statuses } from '@/lib/constants';
 
 export default function IssuesPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const role = user ? getHighestRole(user.roles) : 'student';
+  const isStaff = role === 'institution_admin' || role === 'portal_admin';
+  // Statuses shown as filter chips — exclude pending_review (admin-internal status)
+  const visibleStatuses = statuses.filter(s => s !== 'pending_review');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
@@ -62,7 +69,7 @@ export default function IssuesPage() {
               onChange={setView}
               options={[{ value: 'rows', label: 'Rows' }, { value: 'table', label: 'Table' }]}
             />
-            <Button variant="accent" icon="plus" onClick={() => router.push('/issues/new')}>Report</Button>
+            {!isStaff && <Button variant="accent" icon="plus" onClick={() => router.push('/issues/new')}>Report</Button>}
           </div>
         </div>
 
@@ -79,7 +86,7 @@ export default function IssuesPage() {
 
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className={`chip${statusFilter === 'all' ? ' active' : ''}`} onClick={() => setStatusFilter('all')}>All</button>
-            {statuses.map(s => (
+            {visibleStatuses.map(s => (
               <button key={s} className={`chip${statusFilter === s ? ' active' : ''}`} onClick={() => setStatusFilter(s)}>
                 {statusLabels[s] || s}
               </button>

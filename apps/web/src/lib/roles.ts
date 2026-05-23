@@ -29,7 +29,6 @@ const INSTITUTION_ADMIN_NAV: NavItem[] = [
   { href: '/issues', label: 'All Issues', icon: 'list' },
   { href: '/admin/analytics', label: 'Analytics', icon: 'bar-chart-3' },
   { href: '/admin', label: 'Overview', icon: 'layout-dashboard' },
-  { href: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
 
 const PORTAL_ADMIN_NAV: NavItem[] = [

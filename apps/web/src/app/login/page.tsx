@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
 import { useAuth } from "@/lib/auth";
@@ -22,38 +23,43 @@ export default function LoginPage() {
 
   return (
     <>
-      {/* Full-screen overlay that covers the app shell completely */}
-      <div style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        display: "grid",
-        gridTemplateColumns: "1.15fr 1fr",
-        minHeight: "100vh",
-        background: "var(--bg)",
-      }}>
+      <style>{`
+        .login-grid {
+          position: fixed; inset: 0; z-index: 9999;
+          display: grid;
+          grid-template-columns: 1.15fr 1fr;
+          min-height: 100vh;
+          background: var(--bg);
+        }
+        .login-hero {
+          background: var(--fg); color: var(--bg);
+          padding: 56px 64px;
+          display: flex; flex-direction: column; justify-content: space-between;
+          position: relative; overflow: hidden;
+        }
+        .login-form-side {
+          display: flex; align-items: center; justify-content: center;
+          padding: 40px; background: var(--bg);
+        }
+        @media (max-width: 820px) {
+          .login-grid { grid-template-columns: 1fr; }
+          .login-hero { display: none; }
+          .login-form-side { padding: 32px 24px; align-items: flex-start; padding-top: 60px; }
+        }
+        @media (max-width: 480px) {
+          .login-form-side { padding: 24px 16px; padding-top: 48px; }
+        }
+      `}</style>
+
+      <div className="login-grid">
         {/* Left — brand / hero */}
-        <div style={{
-          background: "var(--fg)",
-          color: "var(--bg)",
-          padding: "56px 64px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          position: "relative",
-          overflow: "hidden",
-        }}>
-          {/* Dot-grid background */}
+        <div className="login-hero">
           <div style={{
-            position: "absolute",
-            inset: 0,
+            position: "absolute", inset: 0,
             backgroundImage: "radial-gradient(color-mix(in oklab, currentColor 10%, transparent) 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
-            opacity: 0.35,
-            pointerEvents: "none",
+            backgroundSize: "24px 24px", opacity: 0.35, pointerEvents: "none",
           }} />
 
-          {/* Logo */}
           <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{
               width: 36, height: 36, borderRadius: 9,
@@ -69,15 +75,12 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Hero text */}
           <div style={{ position: "relative", maxWidth: 500 }}>
             <h1 style={{
               fontFamily: "var(--font-serif)",
-              fontSize: "clamp(40px, 5vw, 62px)",
-              lineHeight: 1.02,
-              letterSpacing: "-0.025em",
-              fontWeight: 400,
-              margin: "0 0 24px",
+              fontSize: "clamp(36px, 4.5vw, 62px)",
+              lineHeight: 1.02, letterSpacing: "-0.025em",
+              fontWeight: 400, margin: "0 0 24px",
             }}>
               A campus that{" "}
               <em style={{ fontStyle: "italic", color: "color-mix(in oklab, var(--bg) 65%, var(--accent))" }}>
@@ -90,8 +93,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Bottom stats */}
-          <div style={{ position: "relative", display: "flex", gap: 32 }}>
+          <div style={{ position: "relative", display: "flex", gap: 32, flexWrap: "wrap" }}>
             {[
               { value: "Real-time", label: "Status updates" },
               { value: "Transparent", label: "Resolution tracking" },
@@ -106,77 +108,39 @@ export default function LoginPage() {
         </div>
 
         {/* Right — sign in form */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "40px",
-          background: "var(--bg)",
-        }}>
+        <div className="login-form-side">
           <div style={{ width: "100%", maxWidth: 380 }}>
-            {/* Header */}
             <div style={{ marginBottom: 32 }}>
               <h2 style={{
-                fontFamily: "var(--font-serif)",
-                fontSize: 32,
-                fontWeight: 400,
-                margin: "0 0 8px",
-                color: "var(--fg)",
-              }}>
-                Sign in
-              </h2>
+                fontFamily: "var(--font-serif)", fontSize: 32,
+                fontWeight: 400, margin: "0 0 8px", color: "var(--fg)",
+              }}>Sign in</h2>
               <p style={{ color: "var(--fg-muted)", fontSize: 14, margin: 0, lineHeight: 1.5 }}>
                 Use your university Google account to continue.
               </p>
             </div>
 
-            {/* Error */}
             {error && (
               <div style={{
-                padding: "12px 14px",
-                borderRadius: 8,
+                padding: "12px 14px", borderRadius: 8,
                 background: "color-mix(in oklab, var(--danger) 12%, transparent)",
                 border: "1px solid color-mix(in oklab, var(--danger) 30%, transparent)",
-                color: "var(--danger)",
-                fontSize: 13,
-                marginBottom: 20,
-                lineHeight: 1.4,
+                color: "var(--danger)", fontSize: 13, marginBottom: 20, lineHeight: 1.4,
               }}>
                 {error}
               </div>
             )}
 
-            {/* Google button */}
-            <div style={{
-              border: "1px solid var(--border)",
-              borderRadius: 10,
-              padding: "20px",
-              background: "var(--bg-surface)",
-            }}>
+            <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "20px", background: "var(--bg-surface)" }}>
               <GoogleSignIn onError={setError} />
             </div>
 
-            {/* Domain hint */}
-            <p style={{
-              marginTop: 20,
-              fontSize: 12,
-              color: "var(--fg-subtle)",
-              lineHeight: 1.5,
-              textAlign: "center",
-            }}>
+            <p style={{ marginTop: 20, fontSize: 12, color: "var(--fg-subtle)", lineHeight: 1.5, textAlign: "center" }}>
               Only <strong>@rishihood.edu.in</strong> Google accounts are accepted
               <br />(including Rishihood subdomains).
             </p>
 
-            {/* Divider */}
-            <div style={{
-              marginTop: 32,
-              paddingTop: 24,
-              borderTop: "1px solid var(--border)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-            }}>
+            <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 10 }}>
               {[
                 { icon: "🔒", text: "Your identity is protected — report anonymously if needed" },
                 { icon: "📊", text: "Track every issue from submission to resolution" },
@@ -191,18 +155,6 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-
-      {/* Mobile layout */}
-      <style>{`
-        @media (max-width: 700px) {
-          .login-overlay-grid {
-            grid-template-columns: 1fr !important;
-          }
-          .login-hero {
-            display: none !important;
-          }
-        }
-      `}</style>
     </>
   );
 }
