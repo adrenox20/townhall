@@ -30,7 +30,7 @@ export function useCreateComment() {
   return useMutation({
     mutationFn: ({ issueId, body, is_internal }: { issueId: string; body: string; is_internal?: boolean }) =>
       api<ApiComment>(`/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify({ body, is_internal }) }),
-    onSuccess: (_, { issueId }) => { queryClient.invalidateQueries({ queryKey: ['comments', issueId] }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['comments'] }); },
     onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to post comment', 'alert'); },
   });
 }

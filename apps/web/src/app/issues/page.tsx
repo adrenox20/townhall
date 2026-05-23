@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useIssues } from '@/hooks/use-issues';
+import { useIssues, useVoteIssue } from '@/hooks/use-issues';
 import type { IssueFilters } from '@/hooks/use-issues';
 import { RouteGuard } from '@/components/shared/route-guard';
 import { SkeletonTable } from '@/components/shared/loading-skeleton';
@@ -30,6 +30,16 @@ export default function IssuesPage() {
 
   const { data, isLoading, isError, error, refetch } = useIssues(filters);
   const issues = data?.items ?? [];
+  const voteIssue = useVoteIssue();
+  const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
+
+  // Seed votedIds from server on each data load (persists across page refresh)
+  useEffect(() => {
+    const serverVoted = issues.filter(i => i.has_voted).map(i => i.id);
+    if (serverVoted.length > 0) {
+      setVotedIds(prev => new Set([...prev, ...serverVoted]));
+    }
+  }, [data]);
 
   return (
     <RouteGuard>
@@ -114,10 +124,22 @@ export default function IssuesPage() {
                   className="issue-row"
                   onClick={() => router.push(`/issues/${issue.public_id}`)}
                 >
-                  <div className="upvote">
+                  <button
+                    type="button"
+                    className={`upvote${votedIds.has(issue.id) ? ' upvote--active' : ''}`}
+                    disabled={votedIds.has(issue.id) || voteIssue.isPending}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (votedIds.has(issue.id)) return;
+                      voteIssue.mutate({ id: issue.id }, {
+                        onSuccess: () => setVotedIds((prev) => new Set([...prev, issue.id])),
+                      });
+                    }}
+                    aria-label={`Upvote: ${issue.votes} votes`}
+                  >
                     <Icon name="arrow-up" size={12} stroke={2.4} />
                     <span className="upvote-count">{issue.votes}</span>
-                  </div>
+                  </button>
 
                   <div style={{ minWidth: 0 }}>
                     <div className="issue-title">{issue.title}</div>

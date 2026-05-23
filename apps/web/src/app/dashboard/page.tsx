@@ -1,9 +1,10 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { getHighestRole } from '@/lib/roles';
-import { useIssues } from '@/hooks/use-issues';
+import { useIssues, useVoteIssue } from '@/hooks/use-issues';
 import { useAdminDashboard, usePublicStats } from '@/hooks/use-admin';
 import { RouteGuard } from '@/components/shared/route-guard';
 import { PageSkeleton } from '@/components/shared/loading-skeleton';
@@ -27,14 +28,26 @@ function DashboardContent() {
   const { user } = useAuth();
   const role = user ? getHighestRole(user.roles) : 'student';
   const isAdmin = role === 'institution_admin' || role === 'portal_admin';
+  const voteIssue = useVoteIssue();
+  const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
 
   // Fetch trending issues (top 5 by votes)
   const { data: trendingData, isLoading: trendingLoading, error: trendingError, refetch: refetchTrending } = useIssues({ sort: 'votes', limit: 5 });
 
-  // Fetch user's own issues (reports for students, assigned for admins)
+  // Sync voted state from server on data load
+  useEffect(() => {
+    const serverVoted = (trendingData?.items ?? [])
+      .filter(i => i.has_voted)
+      .map(i => i.id);
+    if (serverVoted.length > 0) {
+      setVotedIds(prev => new Set([...prev, ...serverVoted]));
+    }
+  }, [trendingData]);
+
+  // Fetch user's own issues only (mine=true for students)
   const myIssuesParams = isAdmin
     ? { status: 'open', limit: 4 }
-    : { limit: 4 };
+    : { mine: true, limit: 4 };
   const { data: myIssuesData, isLoading: myIssuesLoading, error: myIssuesError, refetch: refetchMyIssues } = useIssues(myIssuesParams);
 
   // Admin dashboard stats
@@ -126,7 +139,18 @@ function DashboardContent() {
               <div style={{ padding: '12px 0', color: 'var(--fg-muted)', fontSize: 13 }}>No trending issues yet.</div>
             ) : (
               trending.map(issue => (
-                <TrendingIssueRow key={issue.id} issue={issue} onClick={() => router.push(`/issues/${issue.public_id || issue.id}`)} />
+                <TrendingIssueRow
+                  key={issue.id}
+                  issue={issue}
+                  onClick={() => router.push(`/issues/${issue.public_id || issue.id}`)}
+                  voted={votedIds.has(issue.id)}
+                  onVote={(id) => {
+                    if (votedIds.has(id)) return;
+                    voteIssue.mutate({ id }, {
+                      onSuccess: () => setVotedIds((prev) => new Set([...prev, id])),
+                    });
+                  }}
+                />
               ))
             )}
           </div>
@@ -183,13 +207,19 @@ function DashboardContent() {
 }
 
 /** Compact issue row for the trending section */
-function TrendingIssueRow({ issue, onClick }: { issue: ApiIssue; onClick: () => void }) {
+function TrendingIssueRow({ issue, onClick, onVote, voted }: { issue: ApiIssue; onClick: () => void; onVote: (id: string) => void; voted: boolean }) {
   return (
     <div className="issue-row" onClick={onClick} style={{ cursor: 'pointer' }}>
-      <div className="upvote">
+      <button
+        type="button"
+        className={`upvote${voted ? ' upvote--active' : ''}`}
+        disabled={voted}
+        onClick={(e) => { e.stopPropagation(); onVote(issue.id); }}
+        aria-label={`Upvote: ${issue.votes} votes`}
+      >
         <Icon name="arrow-up" size={12} stroke={2.4} />
         <span className="upvote-count">{issue.votes}</span>
-      </div>
+      </button>
 
       <div style={{ minWidth: 0, flex: 1 }}>
         <div className="issue-title">{issue.title}</div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { statusLabels, statuses } from '@/lib/constants';
@@ -14,9 +15,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { SkeletonCard } from '@/components/shared/loading-skeleton';
+import { useApp } from '@/context/app-context';
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 function IssueDetailContent() {
   const { user } = useAuth();
+  const { pushToast } = useApp();
 
   // Static export: useParams() always returns the placeholder '_'.
   // Read the real issue ID from window.location after mount.
@@ -38,13 +48,19 @@ function IssueDetailContent() {
   const createComment = useCreateComment();
 
   const [commentBody, setCommentBody] = useState('');
+  // All useState calls must be before any early returns (Rules of Hooks)
+  const [voted, setVoted] = useState(false);
+
+  // Sync voted state from server once issue data arrives
+  useEffect(() => {
+    if (issue?.has_voted) setVoted(true);
+  }, [issue?.has_voted]);
 
   const isLoading = issueLoading || commentsLoading || solutionsLoading || timelineLoading;
 
-  // Loading state
   if (isLoading) {
     return (
-      <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
+      <div className="detail-layout">
         <div className="space-y-5">
           <SkeletonCard lines={5} />
           <SkeletonCard lines={4} />
@@ -57,7 +73,6 @@ function IssueDetailContent() {
     );
   }
 
-  // Error state
   if (issueError || !issue) {
     return (
       <Card>
@@ -65,11 +80,9 @@ function IssueDetailContent() {
           <Icon name="alert" size={32} className="text-[var(--danger)]" />
           <p className="text-lg font-medium">Failed to load issue</p>
           <p className="text-sm text-foreground/60">
-            {issueError instanceof Error ? issueError.message : 'The issue could not be found or an error occurred.'}
+            {issueError instanceof Error ? issueError.message : 'The issue could not be found.'}
           </p>
-          <Button variant="primary" onClick={() => window.location.reload()}>
-            Retry
-          </Button>
+          <Button variant="primary" onClick={() => window.location.reload()}>Retry</Button>
         </CardContent>
       </Card>
     );
@@ -77,228 +90,333 @@ function IssueDetailContent() {
 
   const canUpdateStatus = hasPermission(user, 'issue:status_update');
   const canAssign = hasPermission(user, 'issue:assign');
+  const daysOpen = Math.floor((Date.now() - new Date(issue.created_at).getTime()) / 86400000);
 
   function handleStatusChange(newStatus: string) {
-    updateStatus.mutate({ id: issue!.id, status: newStatus });
+    updateStatus.mutate(
+      { id: issue!.id, status: newStatus },
+      { onSuccess: () => pushToast('Status updated', 'check') }
+    );
   }
 
   function handleAssign() {
     if (user) {
-      assignIssue.mutate({ id: issue!.id, assignee_id: user.id });
+      assignIssue.mutate(
+        { id: issue!.id, assignee_id: user.id },
+        { onSuccess: () => pushToast('Assigned to you', 'check') }
+      );
     }
   }
 
-  const [voted, setVoted] = useState(false);
-
   function handleVote() {
-    voteIssue.mutate({ id: issue!.id }, {
-      onSuccess: () => setVoted(true),
-    });
+    if (voted) return;
+    voteIssue.mutate(
+      { id: issue!.id },
+      { onSuccess: () => { setVoted(true); pushToast('Upvoted!', 'check'); } }
+    );
   }
 
   function handleSubmitComment(e: React.FormEvent) {
     e.preventDefault();
     if (!commentBody.trim()) return;
     createComment.mutate(
-      { issueId: issue!.id, body: commentBody.trim() },
+      { issueId: issueId, body: commentBody.trim() },
       { onSuccess: () => setCommentBody('') }
     );
   }
+
   return (
-    <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
-      {/* Left column: Issue detail, comments, comment form */}
-      <div className="space-y-5">
-        {/* Issue header */}
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{issue.public_id}</Badge>
-              <Badge>{statusLabels[issue.status] || issue.status}</Badge>
-              <Badge variant="outline">{issue.urgency}</Badge>
-            </div>
-            <h1 className="mt-3 text-2xl font-semibold">{issue.title}</h1>
-          </CardHeader>
-          <CardContent>
-            <p className="text-foreground/75 whitespace-pre-wrap">{issue.description}</p>
-            <div className="mt-4 flex items-center gap-4 text-sm text-foreground/60">
-              <span>By {issue.is_anonymous ? 'Anonymous' : issue.author?.name || 'Unknown'}</span>
-              <span>·</span>
-              <span>{new Date(issue.created_at).toLocaleDateString()}</span>
-            </div>
-            <div className="mt-4 flex items-center gap-3">
-              <Button
-                variant={voted ? 'accent' : 'ghost'}
-                size="sm"
-                onClick={handleVote}
-                disabled={voteIssue.isPending || voted}
-              >
-                <Icon name="thumbs-up" size={14} />
-                <span className="ml-1">{issue.votes}</span>
-                {voted && <span className="ml-1 text-xs">Upvoted</span>}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Comments section */}
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">Comments ({comments?.length || 0})</h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {comments && comments.length > 0 ? (
-              comments.map((comment) => (
-                <div key={comment.id} className="border-b border-[var(--border)] pb-3 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-medium">{comment.author?.name || 'Unknown'}</span>
-                    <span className="text-foreground/50">·</span>
-                    <span className="text-foreground/50">{new Date(comment.created_at).toLocaleDateString()}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-foreground/80">{comment.body}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-foreground/50">No comments yet.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Comment form */}
-        <Card>
-          <CardContent>
-            <form onSubmit={handleSubmitComment} className="space-y-3">
-              <textarea
-                className="w-full rounded border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                rows={3}
-                placeholder="Write a comment..."
-                value={commentBody}
-                onChange={(e) => setCommentBody(e.target.value)}
-              />
-              <div className="flex justify-end">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  type="submit"
-                  disabled={!commentBody.trim() || createComment.isPending}
-                >
-                  {createComment.isPending ? 'Posting...' : 'Post Comment'}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+    <div>
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+        <Link href="/issues" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px' }} className="btn btn--ghost btn--sm">
+          <Icon name="arrow-left" size={13} />
+          All issues
+        </Link>
+        <Icon name="chevron-right" size={11} />
+        {issue.category && <Badge variant="subtle">{issue.category.name}</Badge>}
+        <span className="mono" style={{ marginLeft: 'auto', color: 'var(--fg-subtle)', fontSize: 12 }}>{issue.public_id}</span>
       </div>
 
-      {/* Right column: Metadata, status controls, timeline, solutions */}
-      <div className="space-y-5">
-        {/* Issue metadata */}
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">Details</h2>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {/* Status control */}
-            {canUpdateStatus && (
-              <div>
-                <label className="block text-foreground/60 mb-1">Status</label>
-                <select
-                  className="w-full rounded border border-[var(--border)] bg-[var(--bg-surface)] px-2 py-1.5 text-sm"
-                  value={issue.status}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                  disabled={updateStatus.isPending}
-                >
-                  {statuses.map((s) => (
-                    <option key={s} value={s}>{statusLabels[s] || s}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {!canUpdateStatus && (
-              <div>
-                <span className="text-foreground/60">Status:</span>{' '}
-                <span className="font-medium">{statusLabels[issue.status] || issue.status}</span>
-              </div>
-            )}
+      {/* Title row: large upvote + title */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18, marginBottom: 22 }}>
+        <button
+          className={`upvote${voted ? ' voted' : ''}`}
+          style={{ padding: '10px 12px', minWidth: 56 }}
+          onClick={handleVote}
+          disabled={voteIssue.isPending || voted}
+          aria-label="Upvote this issue"
+        >
+          <Icon name="arrow-up" size={16} stroke={2.4} />
+          <span className="upvote-count" style={{ fontSize: 16 }}>{issue.votes}</span>
+          <span style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>votes</span>
+        </button>
 
-            <div>
-              <span className="text-foreground/60">Urgency:</span>{' '}
-              <span className="font-medium capitalize">{issue.urgency}</span>
-            </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 className="page-title" style={{ fontSize: 28, marginBottom: 8 }}>{issue.title}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--fg-muted)', fontSize: 13, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span className="avatar avatar--sm" style={{ background: 'var(--accent)', color: 'white', borderColor: 'transparent', fontSize: 9 }}>
+                {issue.is_anonymous ? '?' : getInitials(issue.author?.name ?? '?')}
+              </span>
+              {issue.is_anonymous ? 'Anonymous' : (issue.author?.name ?? 'Unknown')}
+            </span>
+            <span style={{ width: 3, height: 3, borderRadius: 999, background: 'var(--fg-subtle)', opacity: 0.5 }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Icon name="clock" size={12} />
+              {new Date(issue.created_at).toLocaleDateString()}
+            </span>
+            <Badge variant={issue.status as never}>{statusLabels[issue.status] || issue.status}</Badge>
+            <Badge variant={issue.urgency === 'critical' ? 'danger' : 'subtle'}>{issue.urgency}</Badge>
+          </div>
+        </div>
+      </div>
 
-            <div>
-              <span className="text-foreground/60">Category:</span>{' '}
-              <span className="font-medium">{issue.category?.name || 'Uncategorized'}</span>
-            </div>
+      <div className="detail-layout">
+        {/* Left column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-            <div>
-              <span className="text-foreground/60">Department:</span>{' '}
-              <span className="font-medium">{issue.department?.name || 'Unassigned'}</span>
-            </div>
-
-            <div>
-              <span className="text-foreground/60">Assignee:</span>{' '}
-              <span className="font-medium">{issue.assignee?.name || 'Unassigned'}</span>
-            </div>
-
-            {/* Assign button */}
-            {canAssign && (
-              <Button
-                variant="outline"
-                size="sm"
-                block
-                onClick={handleAssign}
-                disabled={assignIssue.isPending}
-              >
-                {assignIssue.isPending ? 'Assigning...' : 'Assign to me'}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Solutions section */}
-        {solutions && solutions.length > 0 && (
+          {/* Description */}
           <Card>
-            <CardHeader>
-              <h2 className="font-semibold">Solutions ({solutions.length})</h2>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {solutions.map((solution) => (
-                <div key={solution.id} className="border-b border-[var(--border)] pb-3 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-medium">{solution.author?.name || 'Unknown'}</span>
-                    {solution.is_official && <Badge variant="accent">Official</Badge>}
-                  </div>
-                  <p className="mt-1 text-sm text-foreground/80">{solution.body}</p>
-                </div>
-              ))}
+            <CardContent>
+              <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fg)', whiteSpace: 'pre-wrap' }}>
+                {issue.description || 'No further description provided.'}
+              </p>
             </CardContent>
           </Card>
-        )}
 
-        {/* Timeline */}
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold">Timeline</h2>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {timeline && timeline.length > 0 ? (
-              timeline.map((event) => (
-                <div key={event.id} className="flex items-start gap-2">
-                  <Icon name="clock" size={14} className="mt-0.5 text-foreground/40 shrink-0" />
-                  <div>
-                    <p className="text-foreground/80">{event.summary}</p>
-                    <p className="text-xs text-foreground/50">
-                      {event.actor?.name || 'System'} · {new Date(event.created_at).toLocaleDateString()}
-                    </p>
+          {/* Comments */}
+          <Card>
+            <CardHeader>
+              <h2 className="font-semibold">Comments ({comments?.length ?? 0})</h2>
+            </CardHeader>
+            <CardContent>
+              <div style={{ marginTop: -8 }}>
+                {(comments ?? []).length === 0 ? (
+                  <p style={{ color: 'var(--fg-subtle)', fontSize: 13, padding: '8px 0' }}>No comments yet.</p>
+                ) : (
+                  (comments ?? []).map((comment) => (
+                    <div key={comment.id} className="comment">
+                      <span className="avatar" style={{ background: 'var(--accent)', color: 'white', borderColor: 'transparent', fontSize: 10 }}>
+                        {getInitials(comment.author?.name ?? '?')}
+                      </span>
+                      <div className="comment-body">
+                        <div className="comment-head">
+                          <span className="comment-author">{comment.author?.name ?? 'Unknown'}</span>
+                          {comment.is_official && <Badge variant="accent">Staff</Badge>}
+                          <span className="comment-time">{new Date(comment.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div className="comment-text">{comment.body}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Comment form */}
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                <form onSubmit={handleSubmitComment}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <span className="avatar" style={{ background: 'var(--accent)', color: 'white', borderColor: 'transparent', fontSize: 10 }}>
+                      {getInitials(user?.name ?? '?')}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <textarea
+                        className="textarea"
+                        placeholder={canUpdateStatus ? 'Update students on progress...' : 'Add a comment...'}
+                        value={commentBody}
+                        onChange={(e) => setCommentBody(e.target.value)}
+                        rows={2}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          type="submit"
+                          disabled={!commentBody.trim() || createComment.isPending}
+                        >
+                          {createComment.isPending ? 'Posting...' : 'Comment'}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
+                </form>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Activity timeline */}
+          <Card>
+            <CardHeader>
+              <h2 className="font-semibold">Activity</h2>
+              <p style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Everything that&apos;s happened on this issue</p>
+            </CardHeader>
+            <CardContent>
+              {(timeline ?? []).length === 0 ? (
+                <p style={{ color: 'var(--fg-subtle)', fontSize: 13 }}>No activity yet.</p>
+              ) : (
+                <div className="timeline">
+                  {(timeline ?? []).map((event) => (
+                    <div key={event.id} className="timeline-item">
+                      <div className="timeline-dot">
+                        <Icon name="clock" size={11} />
+                      </div>
+                      <div className="timeline-body">
+                        <div className="timeline-text">{event.summary}</div>
+                        <div className="timeline-time">
+                          {event.actor?.name ?? 'System'} · {new Date(event.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))
-            ) : (
-              <p className="text-foreground/50">No timeline events yet.</p>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Status */}
+          <Card>
+            <CardHeader><h2 className="font-semibold">Status</h2></CardHeader>
+            <CardContent>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--fg-subtle)' }}>Current</span>
+                  <Badge variant={issue.status as never}>{statusLabels[issue.status] || issue.status}</Badge>
+                </div>
+                {canUpdateStatus && (
+                  <div>
+                    <div style={{ fontSize: 11.5, color: 'var(--fg-subtle)', marginBottom: 6 }}>Move to</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      {statuses.map((s) => (
+                        <button
+                          key={s}
+                          className={`chip${issue.status === s ? ' active' : ''}`}
+                          style={{ justifyContent: 'center' }}
+                          onClick={() => handleStatusChange(s)}
+                          disabled={updateStatus.isPending}
+                        >
+                          {statusLabels[s] || s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Details */}
+          <Card>
+            <CardHeader><h2 className="font-semibold">Details</h2></CardHeader>
+            <CardContent>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <DetailRow label="Reporter">
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span className="avatar avatar--sm" style={{ background: 'var(--accent)', color: 'white', borderColor: 'transparent', fontSize: 9 }}>
+                      {issue.is_anonymous ? '?' : getInitials(issue.author?.name ?? '?')}
+                    </span>
+                    {issue.is_anonymous ? 'Anonymous' : (issue.author?.name ?? 'Unknown')}
+                  </span>
+                </DetailRow>
+
+                <DetailRow label="Assignee">
+                  {issue.assignee ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span className="avatar avatar--sm" style={{ background: 'var(--bg-muted)', fontSize: 9 }}>
+                        {getInitials(issue.assignee.name)}
+                      </span>
+                      {issue.assignee.name}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--fg-subtle)', fontSize: 12 }}>Unassigned</span>
+                  )}
+                </DetailRow>
+
+                {issue.category && (
+                  <DetailRow label="Category">
+                    <Badge variant="subtle">{issue.category.name}</Badge>
+                  </DetailRow>
+                )}
+
+                <DetailRow label="Urgency">
+                  <span style={{ fontSize: 13, textTransform: 'capitalize' }}>{issue.urgency}</span>
+                </DetailRow>
+
+                <DetailRow label="Open for">
+                  <span className="mono" style={{ fontSize: 12.5 }}>
+                    {daysOpen === 0 ? 'today' : `${daysOpen}d`}
+                  </span>
+                </DetailRow>
+
+                {canAssign && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    block
+                    onClick={handleAssign}
+                    disabled={assignIssue.isPending}
+                  >
+                    {assignIssue.isPending ? 'Assigning...' : 'Assign to me'}
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Solutions */}
+          {(solutions ?? []).length > 0 && (
+            <Card>
+              <CardHeader>
+                <h2 className="font-semibold">Solutions ({solutions!.length})</h2>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {solutions!.map((solution) => (
+                  <div key={solution.id} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border)' }} className="last:border-0 last:pb-0">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 12.5 }}>
+                      <span className="avatar avatar--sm" style={{ background: 'var(--bg-muted)', fontSize: 9 }}>
+                        {getInitials(solution.author?.name ?? '?')}
+                      </span>
+                      <span style={{ fontWeight: 600 }}>{solution.author?.name ?? 'Unknown'}</span>
+                      {solution.is_official && <Badge variant="accent">Official</Badge>}
+                    </div>
+                    <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--fg)' }}>{solution.body}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Supporters */}
+          <Card>
+            <CardHeader>
+              <h2 className="font-semibold">Supporters ({issue.votes})</h2>
+              <p style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Students who&apos;ve upvoted</p>
+            </CardHeader>
+            <CardContent>
+              <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+                {issue.votes >= 50
+                  ? <span><Icon name="trending-up" size={12} /> Trending — fast-tracked for triage.</span>
+                  : issue.votes >= 20
+                  ? <span>Strong support. Tagged for review this week.</span>
+                  : <span>Help bring this to staff attention by upvoting.</span>}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 11.5, color: 'var(--fg-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>{label}</span>
+      <span style={{ textAlign: 'right' }}>{children}</span>
     </div>
   );
 }

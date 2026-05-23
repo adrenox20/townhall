@@ -30,7 +30,7 @@ export function useCreateSolution() {
   return useMutation({
     mutationFn: ({ issueId, body }: { issueId: string; body: string }) =>
       api<ApiSolution>(`/issues/${issueId}/solutions`, { method: 'POST', body: JSON.stringify({ body }) }),
-    onSuccess: (_, { issueId }) => { queryClient.invalidateQueries({ queryKey: ['solutions', issueId] }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['solutions'] }); },
     onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to submit solution', 'alert'); },
   });
 }
@@ -41,7 +41,7 @@ export function useSelectOfficialSolution() {
   return useMutation({
     mutationFn: ({ issueId, solutionId }: { issueId: string; solutionId: string }) =>
       api<void>(`/issues/${issueId}/official-solution`, { method: 'POST', body: JSON.stringify({ solution_id: solutionId }) }),
-    onSuccess: (_, { issueId }) => { queryClient.invalidateQueries({ queryKey: ['solutions', issueId] }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['solutions'] }); },
     onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update official solution', 'alert'); },
   });
 }

@@ -17,40 +17,47 @@ const writeIssue = z.object({ title: z.string().min(5), description: z.string().
 issueRoutes.use('*', requireAuth());
 
 issueRoutes.get('/', async (c) => {
+  const user = c.get('user');
   const q = `%${c.req.query('q') || c.req.query('search') || ''}%`;
   const status = c.req.query('status');
   const sort = c.req.query('sort') || 'newest';
+  const mine = c.req.query('mine') === 'true';
   const limit = Math.min(Number(c.req.query('limit') || 50), 100);
   const page = Math.max(Number(c.req.query('page') || 1), 1);
   const offset = (page - 1) * limit;
 
   const orderBy = sort === 'votes' ? 'votes DESC' : sort === 'oldest' ? 'i.created_at ASC' : 'i.created_at DESC';
+  const authorFilter = mine ? user.id : null;
 
   const rows = await c.env.DB.prepare(
     `SELECT i.*,
       json_object('id', c.id, 'name', c.name, 'slug', c.slug) AS category,
       json_object('id', d.id, 'name', d.name, 'slug', d.slug) AS department,
       (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id) votes,
-      (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) comments_count
+      (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) comments_count,
+      (SELECT COUNT(*) FROM issue_votes hv WHERE hv.issue_id = i.id AND hv.user_id = ?) has_voted
      FROM issues i
      LEFT JOIN categories c ON c.id = i.category_id
      LEFT JOIN departments d ON d.id = i.department_id
      WHERE i.is_deleted = 0
        AND (? IS NULL OR i.status = ?)
+       AND (? IS NULL OR i.author_id = ?)
        AND (i.title LIKE ? OR i.description LIKE ?)
      ORDER BY ${orderBy}
      LIMIT ? OFFSET ?`
-  ).bind(status || null, status || null, q, q, limit, offset).all();
+  ).bind(user.id, status || null, status || null, authorFilter, authorFilter, q, q, limit, offset).all();
 
   const countRow = await c.env.DB.prepare(
     `SELECT COUNT(*) as total FROM issues i
      WHERE i.is_deleted = 0
        AND (? IS NULL OR i.status = ?)
+       AND (? IS NULL OR i.author_id = ?)
        AND (i.title LIKE ? OR i.description LIKE ?)`
-  ).bind(status || null, status || null, q, q).first<{ total: number }>();
+  ).bind(status || null, status || null, authorFilter, authorFilter, q, q).first<{ total: number }>();
 
   const items = rows.results.map((row: Record<string, unknown>) => ({
     ...row,
+    has_voted: Boolean(row.has_voted),
     category: row.category_id ? (() => { try { return JSON.parse(row.category as string); } catch { return null; } })() : null,
     department: row.department_id ? (() => { try { return JSON.parse(row.department as string); } catch { return null; } })() : null,
   }));
@@ -82,6 +89,7 @@ issueRoutes.post('/similar', zValidator('json', writeIssue.partial({ urgency: tr
 
 issueRoutes.get('/:id', async (c) => {
   const param = c.req.param('id');
+  const userId = c.get('user').id;
   // Accept both UUID (id) and public_id (e.g. GRV-434473)
   const issue = await c.env.DB.prepare(
     `SELECT i.*,
@@ -90,14 +98,15 @@ issueRoutes.get('/:id', async (c) => {
       CASE WHEN i.category_id IS NOT NULL THEN json_object('id', cat.id, 'name', cat.name, 'slug', cat.slug) ELSE NULL END AS category,
       CASE WHEN i.department_id IS NOT NULL THEN json_object('id', d.id, 'name', d.name, 'slug', d.slug) ELSE NULL END AS department,
       (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id) AS votes,
-      (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) AS comments_count
+      (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) AS comments_count,
+      (SELECT COUNT(*) FROM issue_votes hv WHERE hv.issue_id = i.id AND hv.user_id = ?) AS has_voted
      FROM issues i
      LEFT JOIN users u ON u.id = i.author_id
      LEFT JOIN users a ON a.id = i.assignee_id
      LEFT JOIN categories cat ON cat.id = i.category_id
      LEFT JOIN departments d ON d.id = i.department_id
      WHERE (i.id = ? OR i.public_id = ?) AND i.is_deleted = 0`
-  ).bind(param, param).first<Record<string, unknown>>();
+  ).bind(userId, param, param).first<Record<string, unknown>>();
   if (!issue) return fail(c, 'NOT_FOUND', 'Issue not found', 404);
 
   const parse = (field: unknown) => {
@@ -107,6 +116,7 @@ issueRoutes.get('/:id', async (c) => {
 
   return ok(c, {
     ...issue,
+    has_voted: Boolean(issue.has_voted),
     author: parse(issue.author),
     assignee: parse(issue.assignee),
     category: parse(issue.category),
@@ -174,13 +184,19 @@ issueRoutes.delete('/:id/follow', async (c) => {
 });
 
 issueRoutes.get('/:id/timeline', async (c) => {
+  // Resolve UUID from either UUID or public_id
+  const resolved = await c.env.DB.prepare(
+    'SELECT id FROM issues WHERE (id = ? OR public_id = ?) AND is_deleted = 0 LIMIT 1'
+  ).bind(c.req.param('id'), c.req.param('id')).first<{ id: string }>();
+  if (!resolved) return ok(c, []);
+
   const rows = await c.env.DB.prepare(
     `SELECT ae.*,
       json_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) AS actor
      FROM activity_events ae
      LEFT JOIN users u ON u.id = ae.actor_id
      WHERE ae.issue_id = ? ORDER BY ae.created_at ASC`
-  ).bind(c.req.param('id')).all<Record<string, unknown>>();
+  ).bind(resolved.id).all<Record<string, unknown>>();
   return ok(c, rows.results.map(row => ({
     ...row,
     actor: (() => { try { return JSON.parse(row.actor as string); } catch { return null; } })(),

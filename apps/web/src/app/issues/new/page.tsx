@@ -2,7 +2,7 @@
 
 import { useState, useRef, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCreateIssue, useCategories, useDepartments } from '@/hooks/use-issues';
+import { useCreateIssue, useCategories } from '@/hooks/use-issues';
 import { useCreateSolution } from '@/hooks/use-solutions';
 import { RouteGuard } from '@/components/shared/route-guard';
 import { Card } from '@/components/ui/card';
@@ -22,13 +22,11 @@ export default function NewIssuePage() {
   const createIssue = useCreateIssue();
   const createSolution = useCreateSolution();
   const { data: categories } = useCategories();
-  const { data: departments } = useDepartments();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [urgency, setUrgency] = useState('medium');
   const [categoryId, setCategoryId] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
   const [solutionBody, setSolutionBody] = useState('');
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -87,7 +85,6 @@ export default function NewIssuePage() {
         description,
         urgency,
         ...(categoryId && { category_id: categoryId }),
-        ...(departmentId && { department_id: departmentId }),
       },
       {
         onSuccess: (result) => {
@@ -143,26 +140,15 @@ export default function NewIssuePage() {
               />
             </Field>
 
-            {/* Category + Department side by side on sm+, stacked on mobile */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Category">
-                <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                  <option value="">Select category</option>
-                  {categories?.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field label="Department">
-                <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-                  <option value="">Select department</option>
-                  {departments?.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+            {/* Category */}
+            <Field label="Category">
+              <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                <option value="">Select category</option>
+                {categories?.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+            </Field>
 
             {/* Urgency */}
             <Field label="Urgency">

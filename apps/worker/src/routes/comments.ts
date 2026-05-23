@@ -5,12 +5,23 @@ import type { Env, Variables } from '../env';
 import { requireAuth } from '../middleware/auth';
 import { id } from '../utils/ids';
 import { now } from '../utils/dates';
-import { created, ok } from '../utils/response';
+import { created, fail, ok } from '../utils/response';
 
 export const commentRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 commentRoutes.use('*', requireAuth());
 
+/** Resolve UUID from either UUID or public_id */
+async function resolveIssueUUID(db: Env['DB'], param: string): Promise<string | null> {
+  const row = await db.prepare(
+    'SELECT id FROM issues WHERE (id = ? OR public_id = ?) AND is_deleted = 0 LIMIT 1'
+  ).bind(param, param).first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 commentRoutes.get('/issues/:id/comments', async (c) => {
+  const issueId = await resolveIssueUUID(c.env.DB, c.req.param('id'));
+  if (!issueId) return ok(c, []);
+
   const user = c.get('user');
   const rows = await c.env.DB.prepare(
     `SELECT cm.*,
@@ -19,7 +30,7 @@ commentRoutes.get('/issues/:id/comments', async (c) => {
      LEFT JOIN users u ON u.id = cm.author_id
      WHERE cm.issue_id = ? AND cm.is_deleted = 0 AND (? = 1 OR cm.is_internal = 0)
      ORDER BY cm.is_pinned DESC, cm.created_at ASC`
-  ).bind(c.req.param('id'), user.permissions.includes('comment:moderate') ? 1 : 0).all<Record<string, unknown>>();
+  ).bind(issueId, user.permissions.includes('comment:moderate') ? 1 : 0).all<Record<string, unknown>>();
 
   return ok(c, rows.results.map(row => ({
     ...row,
@@ -28,11 +39,14 @@ commentRoutes.get('/issues/:id/comments', async (c) => {
 });
 
 commentRoutes.post('/issues/:id/comments', zValidator('json', z.object({ body: z.string().min(1), isInternal: z.boolean().default(false), is_internal: z.boolean().optional(), isOfficial: z.boolean().default(false) })), async (c) => {
+  const issueId = await resolveIssueUUID(c.env.DB, c.req.param('id'));
+  if (!issueId) return fail(c, 'NOT_FOUND', 'Issue not found', 404);
+
   const body = c.req.valid('json');
   const commentId = id('comment');
   const isInternal = body.isInternal || body.is_internal || false;
   await c.env.DB.prepare('INSERT INTO comments (id, issue_id, author_id, body, is_internal, is_official, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(commentId, c.req.param('id'), c.get('user').id, body.body, isInternal ? 1 : 0, body.isOfficial ? 1 : 0, now(), now()).run();
+    .bind(commentId, issueId, c.get('user').id, body.body, isInternal ? 1 : 0, body.isOfficial ? 1 : 0, now(), now()).run();
   return created(c, { id: commentId });
 });
 

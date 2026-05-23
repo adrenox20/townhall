@@ -6,12 +6,22 @@ import { requireAuth, requirePermission } from '../middleware/auth';
 import { solutionRank } from '../services/solution-ranking.service';
 import { id } from '../utils/ids';
 import { now } from '../utils/dates';
-import { created, ok } from '../utils/response';
+import { created, fail, ok } from '../utils/response';
 
 export const solutionRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 solutionRoutes.use('*', requireAuth());
 
+async function resolveIssueUUID(db: Env['DB'], param: string): Promise<string | null> {
+  const row = await db.prepare(
+    'SELECT id FROM issues WHERE (id = ? OR public_id = ?) AND is_deleted = 0 LIMIT 1'
+  ).bind(param, param).first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 solutionRoutes.get('/issues/:id/solutions', async (c) => {
+  const issueId = await resolveIssueUUID(c.env.DB, c.req.param('id'));
+  if (!issueId) return ok(c, []);
+
   const user = c.get('user');
   const rows = await c.env.DB.prepare(
     `SELECT s.*,
@@ -19,7 +29,7 @@ solutionRoutes.get('/issues/:id/solutions', async (c) => {
      FROM solutions s
      LEFT JOIN users u ON u.id = s.author_id
      WHERE s.issue_id = ? AND (? = 1 OR s.status NOT IN ('hidden', 'rejected'))`
-  ).bind(c.req.param('id'), user.permissions.includes('solution:review') ? 1 : 0).all<Record<string, unknown>>();
+  ).bind(issueId, user.permissions.includes('solution:review') ? 1 : 0).all<Record<string, unknown>>();
 
   const parsed = rows.results.map(row => ({
     ...row,
@@ -29,9 +39,12 @@ solutionRoutes.get('/issues/:id/solutions', async (c) => {
 });
 
 solutionRoutes.post('/issues/:id/solutions', zValidator('json', z.object({ body: z.string().min(5) })), async (c) => {
+  const issueId = await resolveIssueUUID(c.env.DB, c.req.param('id'));
+  if (!issueId) return fail(c, 'NOT_FOUND', 'Issue not found', 404);
+
   const solutionId = id('solution');
   await c.env.DB.prepare('INSERT INTO solutions (id, issue_id, author_id, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(solutionId, c.req.param('id'), c.get('user').id, c.req.valid('json').body, now(), now()).run();
+    .bind(solutionId, issueId, c.get('user').id, c.req.valid('json').body, now(), now()).run();
   return created(c, { id: solutionId });
 });
 

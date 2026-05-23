@@ -49,6 +49,7 @@ export interface ApiIssue {
   is_locked: boolean;
   votes: number;
   comments_count: number;
+  has_voted: boolean;
   sla_due_at: string | null;
   first_response_at: string | null;
   resolved_at: string | null;
@@ -70,6 +71,7 @@ export interface IssueFilters {
   page?: number;
   limit?: number;
   sort?: string;
+  mine?: boolean;
 }
 
 interface PaginatedResponse<T> {
