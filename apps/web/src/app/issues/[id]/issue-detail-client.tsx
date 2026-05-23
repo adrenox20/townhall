@@ -596,7 +596,7 @@ function IssueDetailContent() {
                   {/* Merge issue button */}
                   {canMerge && (
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       block
                       icon="git-merge"
@@ -626,6 +626,37 @@ function IssueDetailContent() {
                       <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--fg)' }}>{solution.body}</p>
                     </div>
                   ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Merged duplicates */}
+            {(issue.merged_issues ?? []).length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="git-merge" size={14} style={{ color: 'var(--fg-muted)' }} />
+                    <h2 className="font-semibold">Merged duplicates ({issue.merged_issues!.length})</h2>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Issues marked as duplicates of this one</p>
+                </CardHeader>
+                <CardContent>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {issue.merged_issues!.map(m => (
+                      <div key={m.id} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                        padding: '10px 12px', borderRadius: 8,
+                        background: 'var(--bg-muted)', border: '1px solid var(--border)',
+                      }}>
+                        <Icon name="git-merge" size={13} style={{ color: 'var(--fg-subtle)', flexShrink: 0, marginTop: 2 }} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.35 }}>{m.title}</div>
+                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-subtle)', marginTop: 3 }}>{m.public_id}</div>
+                        </div>
+                        <Badge variant={m.status as never} style={{ flexShrink: 0 }}>{statusLabels[m.status] || m.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}

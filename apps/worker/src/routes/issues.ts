@@ -40,6 +40,7 @@ issueRoutes.get('/', async (c) => {
      LEFT JOIN categories c ON c.id = i.category_id
      LEFT JOIN departments d ON d.id = i.department_id
      WHERE i.is_deleted = 0
+       AND i.master_issue_id IS NULL
        AND (? IS NULL OR i.status = ?)
        AND (? IS NULL OR i.author_id = ?)
        AND (i.title LIKE ? OR i.description LIKE ?)
@@ -50,6 +51,7 @@ issueRoutes.get('/', async (c) => {
   const countRow = await c.env.DB.prepare(
     `SELECT COUNT(*) as total FROM issues i
      WHERE i.is_deleted = 0
+       AND i.master_issue_id IS NULL
        AND (? IS NULL OR i.status = ?)
        AND (? IS NULL OR i.author_id = ?)
        AND (i.title LIKE ? OR i.description LIKE ?)`
@@ -99,7 +101,9 @@ issueRoutes.get('/:id', async (c) => {
       CASE WHEN i.department_id IS NOT NULL THEN json_object('id', d.id, 'name', d.name, 'slug', d.slug) ELSE NULL END AS department,
       (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id) AS votes,
       (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) AS comments_count,
-      (SELECT COUNT(*) FROM issue_votes hv WHERE hv.issue_id = i.id AND hv.user_id = ?) AS has_voted
+      (SELECT COUNT(*) FROM issue_votes hv WHERE hv.issue_id = i.id AND hv.user_id = ?) AS has_voted,
+      (SELECT json_group_array(json_object('id', mi.id, 'public_id', mi.public_id, 'title', mi.title, 'status', mi.status))
+       FROM issues mi WHERE mi.master_issue_id = i.id AND mi.is_deleted = 0) AS merged_issues
      FROM issues i
      LEFT JOIN users u ON u.id = i.author_id
      LEFT JOIN users a ON a.id = i.assignee_id
@@ -121,6 +125,7 @@ issueRoutes.get('/:id', async (c) => {
     assignee: parse(issue.assignee),
     category: parse(issue.category),
     department: parse(issue.department),
+    merged_issues: (() => { try { const r = JSON.parse(issue.merged_issues as string); return Array.isArray(r) ? r : []; } catch { return []; } })(),
   });
 });
 

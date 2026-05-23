@@ -50,6 +50,7 @@ export interface ApiIssue {
   votes: number;
   comments_count: number;
   has_voted: boolean;
+  merged_issues?: Array<{ id: string; public_id: string; title: string; status: string }>;
   sla_due_at: string | null;
   first_response_at: string | null;
   resolved_at: string | null;

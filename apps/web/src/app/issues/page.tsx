@@ -84,20 +84,18 @@ export default function IssuesPage() {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <button className={`chip${statusFilter === 'all' ? ' active' : ''}`} onClick={() => setStatusFilter('all')}>All</button>
-            {visibleStatuses.map(s => (
-              <button key={s} className={`chip${statusFilter === s ? ' active' : ''}`} onClick={() => setStatusFilter(s)}>
-                {statusLabels[s] || s}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select className="select" style={{ width: 'auto' }} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+          {/* All 3 filters in one compact row — flex children grow equally */}
+          <div style={{ display: 'flex', gap: 6, width: '100%', marginTop: 4 }}>
+            <select className="select" style={{ flex: 1, minWidth: 0 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="all">All statuses</option>
+              {visibleStatuses.map(s => (
+                <option key={s} value={s}>{statusLabels[s] || s}</option>
+              ))}
+            </select>
+            <select className="select" style={{ flex: 1, minWidth: 0 }} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
               <option value="all">All categories</option>
             </select>
-            <select className="select" style={{ width: 'auto' }} value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            <select className="select" style={{ flex: 1, minWidth: 0 }} value={sortBy} onChange={e => setSortBy(e.target.value)}>
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
               <option value="trending">Most upvoted</option>

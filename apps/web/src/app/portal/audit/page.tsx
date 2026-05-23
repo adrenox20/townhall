@@ -18,7 +18,7 @@ const ACTION_META: Record<string, { label: string; icon: string; variant: 'accen
 
 function formatDetails(action: string, details: Record<string, unknown>): string {
   if (action === 'issue.status_update' && details.from && details.to) {
-    return `${String(details.from)} → ${String(details.to)}`;
+    return `${String(details.from).replace(/_/g, ' ')} → ${String(details.to).replace(/_/g, ' ')}`;
   }
   if (action === 'user.role_change' && details.roleId) {
     return `${details.action ?? 'grant'} ${String(details.roleId).replace('role_', '')}`;
@@ -26,9 +26,16 @@ function formatDetails(action: string, details: Record<string, unknown>): string
   if (action === 'user.suspend') {
     return details.suspended ? 'Account suspended' : 'Account reactivated';
   }
-  const entries = Object.entries(details).filter(([k]) => !['method'].includes(k));
+  if (action === 'issue.assign' && details.assigneeId) {
+    // assigneeId is a user UUID — just show "Assigned"
+    return 'Assigned to staff member';
+  }
+  if (action === 'issue.merge' && details.mergedIssueId) {
+    return `Merged with ${String(details.mergedIssueId).slice(0, 16)}…`;
+  }
+  const entries = Object.entries(details).filter(([k]) => !['method', 'assigneeId', 'mergedIssueId'].includes(k));
   if (entries.length === 0) return '';
-  return entries.map(([k, v]) => `${k}: ${String(v)}`).join(' · ');
+  return entries.map(([k, v]) => `${k.replace(/([A-Z])/g, ' $1').toLowerCase()}: ${String(v)}`).join(' · ');
 }
 
 function AuditContent() {
