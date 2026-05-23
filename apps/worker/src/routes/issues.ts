@@ -6,13 +6,25 @@ import { requireAuth, requirePermission } from '../middleware/auth';
 import { audit } from '../middleware/audit';
 import { canTransition } from '../services/workflow.service';
 import { findSimilarIssues } from '../services/duplicate.service';
+import { notify } from '../services/notification.service';
 import { addHours, now } from '../utils/dates';
 import { id, publicIssueId } from '../utils/ids';
 import { created, fail, ok } from '../utils/response';
 import { normalizeText, summary } from '../utils/text';
 
 export const issueRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
-const writeIssue = z.object({ title: z.string().min(5), description: z.string().min(10), categoryId: z.string().optional(), departmentId: z.string().optional(), urgency: z.enum(['low', 'medium', 'high', 'critical']).default('medium'), isAnonymous: z.boolean().default(false), tags: z.array(z.string()).default([]) });
+const writeIssue = z.object({
+  title: z.string().trim().min(5, 'Title must be at least 5 characters').max(150, 'Title must be 150 characters or fewer'),
+  description: z.string().trim().min(10, 'Description must be at least 10 characters').max(5000, 'Description must be 5000 characters or fewer'),
+  category_id: z.string().optional(),
+  department_id: z.string().optional(),
+  categoryId: z.string().optional(),
+  departmentId: z.string().optional(),
+  urgency: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
+  isAnonymous: z.boolean().default(false),
+  is_anonymous: z.boolean().optional(),
+  tags: z.array(z.string()).default([]),
+});
 
 issueRoutes.use('*', requireAuth());
 
@@ -59,6 +71,8 @@ issueRoutes.get('/', async (c) => {
 
   const items = rows.results.map((row: Record<string, unknown>) => ({
     ...row,
+    // Strip identity fields for anonymous submissions
+    author_id: row.is_anonymous ? null : row.author_id,
     has_voted: Boolean(row.has_voted),
     category: row.category_id ? (() => { try { return JSON.parse(row.category as string); } catch { return null; } })() : null,
     department: row.department_id ? (() => { try { return JSON.parse(row.department as string); } catch { return null; } })() : null,
@@ -70,13 +84,29 @@ issueRoutes.get('/', async (c) => {
 issueRoutes.post('/', requirePermission('issue:create'), zValidator('json', writeIssue), async (c) => {
   const body = c.req.valid('json');
   const user = c.get('user');
+  // Accept both camelCase (legacy) and snake_case (new frontend)
+  const categoryId = body.category_id || body.categoryId || null;
+  const departmentId = body.department_id || body.departmentId || null;
+  const isAnonymous = body.is_anonymous ?? body.isAnonymous;
+
+  // Verify category exists if provided
+  if (categoryId) {
+    const cat = await c.env.DB.prepare('SELECT id FROM categories WHERE id = ?').bind(categoryId).first();
+    if (!cat) return fail(c, 'BAD_REQUEST', 'Invalid category', 400);
+  }
+  // Verify department exists if provided
+  if (departmentId) {
+    const dept = await c.env.DB.prepare('SELECT id FROM departments WHERE id = ?').bind(departmentId).first();
+    if (!dept) return fail(c, 'BAD_REQUEST', 'Invalid department', 400);
+  }
+
   const issueId = id('issue');
   const publicId = publicIssueId();
-  const category = body.categoryId ? await c.env.DB.prepare('SELECT sla_hours FROM categories WHERE id = ?').bind(body.categoryId).first<{ sla_hours: number }>() : null;
+  const category = categoryId ? await c.env.DB.prepare('SELECT sla_hours FROM categories WHERE id = ?').bind(categoryId).first<{ sla_hours: number }>() : null;
   await c.env.DB.prepare(
     `INSERT INTO issues (id, public_id, title, normalized_title, description, summary, category_id, department_id, author_id, status, urgency, is_anonymous, sla_due_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`
-  ).bind(issueId, publicId, body.title, normalizeText(body.title), body.description, summary(body.description), body.categoryId || null, body.departmentId || null, user.id, body.urgency, body.isAnonymous ? 1 : 0, addHours(category?.sla_hours || 72), now(), now()).run();
+  ).bind(issueId, publicId, body.title, normalizeText(body.title), body.description, summary(body.description), categoryId, departmentId, user.id, body.urgency, isAnonymous ? 1 : 0, addHours(category?.sla_hours || 72), now(), now()).run();
   for (const tagId of body.tags) await c.env.DB.prepare('INSERT OR IGNORE INTO issue_tags (issue_id, tag_id) VALUES (?, ?)').bind(issueId, tagId).run();
   await c.env.DB.prepare('INSERT INTO issue_watchers (issue_id, user_id, created_at) VALUES (?, ?, ?)').bind(issueId, user.id, now()).run();
   const similar = await findSimilarIssues(c, body);
@@ -102,7 +132,14 @@ issueRoutes.get('/:id', async (c) => {
       (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = i.id) AS votes,
       (SELECT COUNT(*) FROM comments cm WHERE cm.issue_id = i.id AND cm.is_deleted = 0) AS comments_count,
       (SELECT COUNT(*) FROM issue_votes hv WHERE hv.issue_id = i.id AND hv.user_id = ?) AS has_voted,
-      (SELECT json_group_array(json_object('id', mi.id, 'public_id', mi.public_id, 'title', mi.title, 'status', mi.status))
+      (SELECT json_group_array(json_object(
+         'id', mi.id, 'public_id', mi.public_id, 'title', mi.title,
+         'description', mi.description, 'urgency', mi.urgency,
+         'is_anonymous', mi.is_anonymous,
+         'author_name', CASE WHEN mi.is_anonymous = 1 THEN NULL ELSE (SELECT u2.name FROM users u2 WHERE u2.id = mi.author_id) END,
+         'votes', (SELECT COUNT(*) FROM issue_votes iv WHERE iv.issue_id = mi.id),
+         'comments_count', (SELECT COUNT(*) FROM comments cm2 WHERE cm2.issue_id = mi.id AND cm2.is_deleted = 0)
+       ))
        FROM issues mi WHERE mi.master_issue_id = i.id AND mi.is_deleted = 0) AS merged_issues
      FROM issues i
      LEFT JOIN users u ON u.id = i.author_id
@@ -118,10 +155,13 @@ issueRoutes.get('/:id', async (c) => {
     try { return JSON.parse(field as string); } catch { return null; }
   };
 
+  const isAnon = Boolean(issue.is_anonymous);
   return ok(c, {
     ...issue,
+    // Strip identity for anonymous issues — author_id is retained internally for notifications
+    author_id: isAnon ? null : issue.author_id,
+    author: isAnon ? null : parse(issue.author),
     has_voted: Boolean(issue.has_voted),
-    author: parse(issue.author),
     assignee: parse(issue.assignee),
     category: parse(issue.category),
     department: parse(issue.department),
@@ -141,10 +181,23 @@ issueRoutes.patch('/:id', zValidator('json', writeIssue.partial()), async (c) =>
   return ok(c, { updated: true });
 });
 
-issueRoutes.delete('/:id', async (c) => {
-  const issue = await c.env.DB.prepare('SELECT author_id, status FROM issues WHERE id = ?').bind(c.req.param('id')).first<{ author_id: string; status: string }>();
-  if (!issue || issue.author_id !== c.get('user').id || issue.status !== 'pending_review') return fail(c, 'FORBIDDEN', 'Can only delete own issue before review', 403);
-  await c.env.DB.prepare('UPDATE issues SET is_deleted = 1, deleted_at = ?, updated_at = ? WHERE id = ?').bind(now(), now(), c.req.param('id')).run();
+issueRoutes.delete('/:id', zValidator('json', z.object({ reason: z.string().min(1).optional() })), async (c) => {
+  const user = c.get('user');
+  const issueId = c.req.param('id');
+  const body = c.req.valid('json');
+  const issue = await c.env.DB.prepare('SELECT id, author_id, status, title FROM issues WHERE id = ?').bind(issueId).first<{ id: string; author_id: string; status: string; title: string }>();
+  if (!issue) return fail(c, 'NOT_FOUND', 'Issue not found', 404);
+  const canDeleteAny = user.permissions.includes('issue:delete_any');
+  const canDeleteOwn = issue.author_id === user.id && issue.status === 'pending_review';
+  if (!canDeleteAny && !canDeleteOwn) return fail(c, 'FORBIDDEN', 'Can only delete own issue before review', 403);
+  if (canDeleteAny && !body.reason) return fail(c, 'BAD_REQUEST', 'A reason is required when deleting an issue as a moderator', 400);
+  await c.env.DB.prepare('UPDATE issues SET is_deleted = 1, deleted_at = ?, updated_at = ? WHERE id = ?').bind(now(), now(), issueId).run();
+  await audit(c, 'issue.delete', 'issue', issueId, { by: user.id, canDeleteAny, reason: body.reason });
+  // Notify the issue author if someone else deleted it
+  if (canDeleteAny && issue.author_id !== user.id) {
+    const title = issue.title.length > 60 ? issue.title.slice(0, 60) + '…' : issue.title;
+    await notify(c, issue.author_id, 'Your issue was removed', `"${title}" was removed. Reason: ${body.reason}`);
+  }
   return ok(c, { deleted: true });
 });
 
@@ -162,6 +215,14 @@ issueRoutes.patch('/:id/status', requirePermission('issue:status_update'), zVali
   await c.env.DB.prepare('INSERT INTO activity_events (id, issue_id, actor_id, type, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(id('act'), issueId, actor.id, 'status_changed', `Status changed to ${body.status.replace(/_/g, ' ')}${body.note ? ': ' + body.note : ''}`, now()).run();
   await audit(c, 'issue.status_update', 'issue', issueId, { from: issue.status, to: body.status });
+  // Notify all watchers of this status change
+  const watchers = await c.env.DB.prepare(
+    'SELECT user_id FROM issue_watchers WHERE issue_id = ? AND user_id != ?'
+  ).bind(issueId, actor.id).all<{ user_id: string }>();
+  const statusLabel = body.status.replace(/_/g, ' ');
+  for (const watcher of watchers.results) {
+    await notify(c, watcher.user_id, 'Issue status updated', `Status changed to ${statusLabel}${body.note ? ': ' + body.note : ''}`, issueId);
+  }
   return ok(c, { status: body.status });
 });
 
@@ -177,6 +238,11 @@ issueRoutes.patch('/:id/assign', requirePermission('issue:assign'), zValidator('
   await c.env.DB.prepare('INSERT INTO activity_events (id, issue_id, actor_id, type, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(id('act'), issueId, actor.id, 'assigned', `Assigned to ${assignee?.name ?? assigneeId}`, now()).run();
   await audit(c, 'issue.assign', 'issue', issueId, { assigneeId });
+  // Notify issue author if they're watching
+  const issueAuthor = await c.env.DB.prepare('SELECT author_id FROM issues WHERE id = ?').bind(issueId).first<{ author_id: string }>();
+  if (issueAuthor && issueAuthor.author_id !== actor.id) {
+    await notify(c, issueAuthor.author_id, 'Issue assigned', `Your issue has been assigned to ${assignee?.name ?? 'a team member'}`, issueId);
+  }
   return ok(c, { assigned: true });
 });
 

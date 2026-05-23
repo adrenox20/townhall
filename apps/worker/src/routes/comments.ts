@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import type { Env, Variables } from '../env';
 import { requireAuth } from '../middleware/auth';
+import { notify } from '../services/notification.service';
 import { id } from '../utils/ids';
 import { now } from '../utils/dates';
 import { created, fail, ok } from '../utils/response';
@@ -38,15 +39,28 @@ commentRoutes.get('/issues/:id/comments', async (c) => {
   })));
 });
 
-commentRoutes.post('/issues/:id/comments', zValidator('json', z.object({ body: z.string().min(1), isInternal: z.boolean().default(false), is_internal: z.boolean().optional(), isOfficial: z.boolean().default(false) })), async (c) => {
+commentRoutes.post('/issues/:id/comments', zValidator('json', z.object({ body: z.string().min(1), isInternal: z.boolean().default(false), is_internal: z.boolean().optional() })), async (c) => {
   const issueId = await resolveIssueUUID(c.env.DB, c.req.param('id'));
   if (!issueId) return fail(c, 'NOT_FOUND', 'Issue not found', 404);
 
   const body = c.req.valid('json');
+  const user = c.get('user');
   const commentId = id('comment');
   const isInternal = body.isInternal || body.is_internal || false;
+  // Auto-mark comment as official if the commenter is staff (has status_update permission)
+  const isOfficial = user.permissions.includes('issue:status_update') ? 1 : 0;
   await c.env.DB.prepare('INSERT INTO comments (id, issue_id, author_id, body, is_internal, is_official, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(commentId, issueId, c.get('user').id, body.body, isInternal ? 1 : 0, body.isOfficial ? 1 : 0, now(), now()).run();
+    .bind(commentId, issueId, user.id, body.body, isInternal ? 1 : 0, isOfficial, now(), now()).run();
+
+  // Notify all watchers except the commenter
+  const watchers = await c.env.DB.prepare(
+    'SELECT user_id FROM issue_watchers WHERE issue_id = ? AND user_id != ?'
+  ).bind(issueId, user.id).all<{ user_id: string }>();
+  const preview = body.body.length > 80 ? body.body.slice(0, 80) + '…' : body.body;
+  for (const watcher of watchers.results) {
+    await notify(c, watcher.user_id, `${user.name} commented`, preview, issueId);
+  }
+
   return created(c, { id: commentId });
 });
 

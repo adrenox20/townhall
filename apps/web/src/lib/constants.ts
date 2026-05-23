@@ -1,5 +1,6 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787/api/v1';
-export const statuses = ['pending_review', 'open', 'under_investigation', 'in_progress', 'waiting_for_student_response', 'escalated', 'resolved', 'rejected', 'archived'];
+export const statuses = ['open', 'under_investigation', 'in_progress', 'waiting_for_student_response', 'escalated', 'resolved', 'rejected', 'archived'];
+export const allStatuses = ['pending_review', ...statuses]; // includes legacy status for display only
 export const statusLabels: Record<string, string> = {
   pending_review: 'Pending Review',
   open: 'Open',

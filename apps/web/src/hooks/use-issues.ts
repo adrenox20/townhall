@@ -50,7 +50,17 @@ export interface ApiIssue {
   votes: number;
   comments_count: number;
   has_voted: boolean;
-  merged_issues?: Array<{ id: string; public_id: string; title: string; status: string }>;
+  merged_issues?: Array<{
+    id: string;
+    public_id: string;
+    title: string;
+    description: string;
+    urgency: string;
+    votes: number;
+    comments_count: number;
+    author_name: string | null;
+    is_anonymous: number | boolean;
+  }>;
   sla_due_at: string | null;
   first_response_at: string | null;
   resolved_at: string | null;
@@ -106,7 +116,7 @@ export function useIssue(id: string) {
 export function useCreateIssue() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { title: string; description: string; category_id?: string; department_id?: string; urgency?: string; is_anonymous?: boolean }) =>
+    mutationFn: (data: { title: string; description: string; category_id?: string; department_id?: string; urgency?: string; isAnonymous?: boolean; is_anonymous?: boolean }) =>
       api<{ id: string; public_id: string; similar: unknown[] }>('/issues', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['issues'] }); },
   });
@@ -153,6 +163,20 @@ export function useMergeIssue() {
       pushToast('Issues merged successfully', 'check');
     },
     onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to merge issues', 'alert'); },
+  });
+}
+
+export function useDeleteIssue() {
+  const queryClient = useQueryClient();
+  const { pushToast } = useApp();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      api<{ deleted: boolean }>(`/issues/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+      pushToast('Issue deleted', 'check');
+    },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to delete issue', 'alert'); },
   });
 }
 

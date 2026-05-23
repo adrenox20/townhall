@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useIssues, useVoteIssue } from '@/hooks/use-issues';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useIssues, useVoteIssue, useDeleteIssue } from '@/hooks/use-issues';
 import type { IssueFilters } from '@/hooks/use-issues';
 import { useAuth } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
 import { getHighestRole } from '@/lib/roles';
 import { RouteGuard } from '@/components/shared/route-guard';
 import { SkeletonTable } from '@/components/shared/loading-skeleton';
@@ -14,18 +15,25 @@ import { Badge } from '@/components/ui/badge';
 import { Icon } from '@/components/ui/icon';
 import { statusLabels, statuses } from '@/lib/constants';
 
-export default function IssuesPage() {
+function IssuesPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const role = user ? getHighestRole(user.roles) : 'student';
   const isStaff = role === 'institution_admin' || role === 'portal_admin';
-  // Statuses shown as filter chips — exclude pending_review (admin-internal status)
-  const visibleStatuses = statuses.filter(s => s !== 'pending_review');
+  const canDeleteAny = hasPermission(user, 'issue:delete_any');
+  const visibleStatuses = statuses;
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [view, setView] = useState('rows');
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(searchParams.get('q') ?? '');
+
+  // Sync search query from URL when navigated from global search bar
+  useEffect(() => {
+    const urlQ = searchParams.get('q') ?? '';
+    setQ(urlQ);
+  }, [searchParams]);
 
   // Build API filter params
   const filters: IssueFilters = {
@@ -38,7 +46,10 @@ export default function IssuesPage() {
   const { data, isLoading, isError, error, refetch } = useIssues(filters);
   const issues = data?.items ?? [];
   const voteIssue = useVoteIssue();
+  const deleteIssue = useDeleteIssue();
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
 
   // Seed votedIds from server on each data load (persists across page refresh)
   useEffect(() => {
@@ -50,6 +61,64 @@ export default function IssuesPage() {
 
   return (
     <RouteGuard>
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', padding: 20,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
+        >
+          <div style={{
+            background: 'var(--bg-elev)', borderRadius: 16, border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-lg)', width: '100%', maxWidth: 440, overflow: 'hidden',
+          }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--danger)' }}>Delete issue</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-subtle)', marginTop: 2 }}>This action cannot be undone</div>
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.5, margin: 0 }}>
+                Deleting <strong style={{ color: 'var(--fg)' }}>&ldquo;{deleteTarget.title}&rdquo;</strong>.
+                The author will be notified with your reason.
+              </p>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg-muted)', display: 'block', marginBottom: 6 }}>
+                  Reason <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
+                <textarea
+                  className="textarea"
+                  rows={3}
+                  placeholder="e.g. Abusive language, spam, or duplicate report…"
+                  value={deleteReason}
+                  onChange={e => setDeleteReason(e.target.value)}
+                  style={{ resize: 'none' }}
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '1px solid var(--border)' }}>
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                disabled={!deleteReason.trim() || deleteIssue.isPending}
+                onClick={() => {
+                  if (!deleteReason.trim() || !deleteTarget) return;
+                  deleteIssue.mutate(
+                    { id: deleteTarget.id, reason: deleteReason.trim() },
+                    { onSuccess: () => setDeleteTarget(null) }
+                  );
+                }}
+                style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}
+              >
+                {deleteIssue.isPending ? 'Deleting…' : 'Delete issue'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div>
         <div className="page-head">
           <div>
@@ -167,6 +236,22 @@ export default function IssuesPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <Badge variant={issue.status}>{statusLabels[issue.status] || issue.status}</Badge>
                     <Badge variant="subtle">{issue.urgency}</Badge>
+                    {canDeleteAny && (
+                      <button
+                        type="button"
+                        title="Delete issue (moderator)"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget({ id: issue.id, title: issue.title });
+                          setDeleteReason('');
+                        }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '2px 4px', borderRadius: 4, opacity: 0.7 }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = '0.7')}
+                      >
+                        <Icon name="trash" size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -206,5 +291,13 @@ export default function IssuesPage() {
         </div>
       </div>
     </RouteGuard>
+  );
+}
+
+export default function IssuesPage() {
+  return (
+    <Suspense>
+      <IssuesPageContent />
+    </Suspense>
   );
 }

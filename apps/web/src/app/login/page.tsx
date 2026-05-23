@@ -65,9 +65,9 @@ export default function LoginPage() {
               width: 36, height: 36, borderRadius: 9,
               background: "transparent",
               display: "grid", placeItems: "center",
-            }}><img src="/logo.svg" alt="Campus Issues" style={{ width: 36, height: 36, objectFit: 'contain' }} /></div>
+            }}><img src="/logo.svg" alt="Town Hall" style={{ width: 36, height: 36, objectFit: 'contain' }} /></div>
             <div>
-              <div style={{ fontFamily: "var(--font-serif)", fontSize: 19, lineHeight: 1.1 }}>Campus Issues</div>
+              <div style={{ fontFamily: "var(--font-serif)", fontSize: 19, lineHeight: 1.1 }}>Town Hall</div>
               <div style={{ fontSize: 10, opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.1em", marginTop: 2 }}>
                 Rishihood University
               </div>

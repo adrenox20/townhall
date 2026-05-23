@@ -1,5 +1,6 @@
 INSERT OR IGNORE INTO roles (id, name, description) VALUES
   ('role_student', 'student', 'Default student role'),
+  ('role_moderator', 'moderator', 'Content moderator — can merge and delete issues'),
   ('role_institution_admin', 'institution_admin', 'Institution operations administrator'),
   ('role_portal_admin', 'portal_admin', 'Global portal administrator');
 
@@ -9,6 +10,7 @@ INSERT OR IGNORE INTO permissions (id, name, description) VALUES
   ('perm_issue_update_own', 'issue:update_own', 'Update own pending-review issues'),
   ('perm_issue_update_any', 'issue:update_any', 'Update any issue'),
   ('perm_issue_delete_own_pre_review', 'issue:delete_own_pre_review', 'Delete own issue before review'),
+  ('perm_issue_delete_any', 'issue:delete_any', 'Delete any issue (moderator action)'),
   ('perm_issue_status_update', 'issue:status_update', 'Update issue workflow status'),
   ('perm_issue_assign', 'issue:assign', 'Assign issues'),
   ('perm_issue_merge', 'issue:merge', 'Merge duplicate issues'),
@@ -32,9 +34,14 @@ SELECT 'role_student', id FROM permissions WHERE name IN (
   'comment:create','solution:create'
 );
 INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+SELECT 'role_moderator', id FROM permissions WHERE name IN (
+  'issue:create','issue:read_public','issue:update_own','issue:delete_own_pre_review',
+  'issue:delete_any','issue:merge','comment:create','comment:moderate','solution:create'
+);
+INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 'role_institution_admin', id FROM permissions WHERE name IN (
   'issue:create','issue:read_public','issue:update_own','issue:update_any',
-  'issue:delete_own_pre_review','issue:status_update','issue:assign','issue:merge',
+  'issue:delete_own_pre_review','issue:status_update','issue:assign',
   'issue:archive','comment:create','comment:moderate','solution:create',
   'solution:review','solution:official_select','analytics:institution_read'
 );

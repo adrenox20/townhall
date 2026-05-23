@@ -15,15 +15,19 @@ export function Select({ className = '', ...props }: SelectHTMLAttributes<HTMLSe
 interface FieldProps {
   label?: string;
   hint?: string;
+  error?: string;
   children: React.ReactNode;
 }
 
-export function Field({ label, hint, children }: FieldProps) {
+export function Field({ label, hint, error, children }: FieldProps) {
   return (
     <div className="field">
       {label && <label className="field-label">{label}</label>}
       {children}
-      {hint && <div className="field-hint">{hint}</div>}
+      {error
+        ? <div className="field-hint" style={{ color: 'var(--danger)' }}>{error}</div>
+        : hint && <div className="field-hint">{hint}</div>
+      }
     </div>
   );
 }

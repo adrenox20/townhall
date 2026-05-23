@@ -11,10 +11,51 @@ import { Input, Textarea, Select, Field } from '@/components/ui/input';
 import { Icon } from '@/components/ui/icon';
 import { API_URL } from '@/lib/constants';
 
+const TITLE_MIN = 5;
+const TITLE_MAX = 150;
+const DESC_MIN = 10;
+const DESC_MAX = 5000;
+const SOLUTION_MAX = 3000;
+
 interface UploadedFile {
   key: string;
   name: string;
   url: string;
+}
+
+interface FormErrors {
+  title?: string;
+  description?: string;
+  solution?: string;
+}
+
+function validate(title: string, description: string, solution: string): FormErrors {
+  const errors: FormErrors = {};
+  const t = title.trim();
+  const d = description.trim();
+  const s = solution.trim();
+
+  if (!t) {
+    errors.title = 'Title is required.';
+  } else if (t.length < TITLE_MIN) {
+    errors.title = `Title must be at least ${TITLE_MIN} characters.`;
+  } else if (t.length > TITLE_MAX) {
+    errors.title = `Title must be ${TITLE_MAX} characters or fewer.`;
+  }
+
+  if (!d) {
+    errors.description = 'Description is required.';
+  } else if (d.length < DESC_MIN) {
+    errors.description = `Description must be at least ${DESC_MIN} characters.`;
+  } else if (d.length > DESC_MAX) {
+    errors.description = `Description must be ${DESC_MAX} characters or fewer.`;
+  }
+
+  if (s && s.length > SOLUTION_MAX) {
+    errors.solution = `Proposed solution must be ${SOLUTION_MAX} characters or fewer.`;
+  }
+
+  return errors;
 }
 
 export default function NewIssuePage() {
@@ -27,11 +68,28 @@ export default function NewIssuePage() {
   const [description, setDescription] = useState('');
   const [urgency, setUrgency] = useState('medium');
   const [categoryId, setCategoryId] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [solutionBody, setSolutionBody] = useState('');
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [submitted, setSubmitted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Re-validate live only after first submit attempt
+  function handleTitleChange(v: string) {
+    setTitle(v);
+    if (submitted) setErrors(e => ({ ...e, title: validate(v, description, solutionBody).title }));
+  }
+  function handleDescChange(v: string) {
+    setDescription(v);
+    if (submitted) setErrors(e => ({ ...e, description: validate(title, v, solutionBody).description }));
+  }
+  function handleSolutionChange(v: string) {
+    setSolutionBody(v);
+    if (submitted) setErrors(e => ({ ...e, solution: validate(title, description, v).solution }));
+  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -40,12 +98,20 @@ export default function NewIssuePage() {
     setUploading(true);
 
     for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) {
+        setUploadError(`${file.name} exceeds the 10 MB limit.`);
+        continue;
+      }
+      const allowed = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+      if (!allowed.includes(file.type)) {
+        setUploadError(`${file.name} is not an allowed file type (PNG, JPEG, WebP, PDF).`);
+        continue;
+      }
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
         const headers: Record<string, string> = { 'content-type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        // Get presigned info
         const presignRes = await fetch(`${API_URL}/uploads/presign`, {
           method: 'POST',
           headers,
@@ -55,7 +121,6 @@ export default function NewIssuePage() {
         const presignJson = await presignRes.json() as { data: { key: string; uploadUrl: string } };
         const { key, uploadUrl } = presignJson.data;
 
-        // Upload directly
         await fetch(`${API_URL.replace('/api/v1', '')}${uploadUrl}`, {
           method: 'PUT',
           body: file,
@@ -65,7 +130,7 @@ export default function NewIssuePage() {
 
         setAttachments((prev) => [...prev, { key, name: file.name, url: uploadUrl }]);
       } catch {
-        setUploadError(`Failed to upload ${file.name}. Max size is 10 MB.`);
+        setUploadError(`Failed to upload ${file.name}.`);
       }
     }
 
@@ -79,16 +144,22 @@ export default function NewIssuePage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    setSubmitted(true);
+    const fieldErrors = validate(title, description, solutionBody);
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors);
+      return;
+    }
     createIssue.mutate(
       {
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         urgency,
+        isAnonymous,
         ...(categoryId && { category_id: categoryId }),
       },
       {
         onSuccess: (result) => {
-          // If user provided a proposed solution, submit it right after
           if (solutionBody.trim()) {
             createSolution.mutate(
               { issueId: result.id, body: solutionBody.trim() },
@@ -117,33 +188,43 @@ export default function NewIssuePage() {
         </div>
 
         <Card>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
 
             {/* Title */}
-            <Field label="Title">
+            <Field
+              label="Title"
+              error={errors.title}
+              hint={`${title.length}/${TITLE_MAX} characters · min ${TITLE_MIN}`}
+            >
               <Input
-                required
                 placeholder="Brief summary of the issue"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                maxLength={TITLE_MAX + 50}
+                style={errors.title ? { borderColor: 'var(--danger)' } : undefined}
               />
             </Field>
 
             {/* Description */}
-            <Field label="Description">
+            <Field
+              label="Description"
+              error={errors.description}
+              hint={`${description.length}/${DESC_MAX} characters · min ${DESC_MIN}`}
+            >
               <Textarea
-                required
                 rows={5}
-                placeholder="Provide details about the issue..."
+                placeholder="Provide details about the issue — where it happens, how often, what you've tried…"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => handleDescChange(e.target.value)}
+                maxLength={DESC_MAX + 200}
+                style={errors.description ? { borderColor: 'var(--danger)' } : undefined}
               />
             </Field>
 
             {/* Category */}
-            <Field label="Category">
+            <Field label="Category" hint="Choose the most relevant category for your issue.">
               <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                <option value="">Select category</option>
+                <option value="">Select category (optional)</option>
                 {categories?.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -151,17 +232,45 @@ export default function NewIssuePage() {
             </Field>
 
             {/* Urgency */}
-            <Field label="Urgency">
+            <Field label="Urgency" hint="How urgently does this need to be addressed?">
               <Select value={urgency} onChange={(e) => setUrgency(e.target.value)}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
+                <option value="low">Low — minor inconvenience</option>
+                <option value="medium">Medium — affects daily work</option>
+                <option value="high">High — significant disruption</option>
+                <option value="critical">Critical — immediate action needed</option>
               </Select>
             </Field>
 
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                padding: '12px',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                background: 'var(--bg-surface)',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isAnonymous}
+                onChange={(e) => setIsAnonymous(e.target.checked)}
+                style={{ marginTop: 3 }}
+              />
+              <span>
+                <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>
+                  Submit anonymously
+                </span>
+                <span style={{ display: 'block', marginTop: 2, fontSize: 13, color: 'var(--fg-subtle)', lineHeight: 1.4 }}>
+                  Your name will be hidden from public issue views.
+                </span>
+              </span>
+            </label>
+
             {/* Attachments */}
-            <Field label="Attachments" hint="Images or PDFs, max 10 MB each">
+            <Field label="Attachments" hint="Images or PDFs, max 10 MB each.">
               <div className="space-y-2">
                 <div
                   style={{
@@ -169,15 +278,16 @@ export default function NewIssuePage() {
                     borderRadius: 8,
                     padding: '20px 16px',
                     textAlign: 'center',
-                    cursor: 'pointer',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
                     background: 'var(--bg-surface)',
                     transition: 'border-color 0.15s',
+                    opacity: uploading ? 0.6 : 1,
                   }}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => !uploading && fileInputRef.current?.click()}
                 >
                   <Icon name="paperclip" size={20} className="mx-auto mb-1 text-foreground/40" />
                   <p className="text-sm text-foreground/60">
-                    {uploading ? 'Uploading...' : 'Click to attach images or PDFs'}
+                    {uploading ? 'Uploading…' : 'Click to attach images or PDFs'}
                   </p>
                   <input
                     ref={fileInputRef}
@@ -231,19 +341,22 @@ export default function NewIssuePage() {
             {/* Proposed Solution */}
             <Field
               label="Proposed Solution (optional)"
-              hint="If you already have an idea how this could be fixed, share it here."
+              error={errors.solution}
+              hint={solutionBody ? `${solutionBody.length}/${SOLUTION_MAX} characters` : 'If you have an idea how this could be fixed, share it here.'}
             >
               <Textarea
                 rows={3}
-                placeholder="Describe a possible solution or workaround..."
+                placeholder="Describe a possible solution or workaround…"
                 value={solutionBody}
-                onChange={(e) => setSolutionBody(e.target.value)}
+                onChange={(e) => handleSolutionChange(e.target.value)}
+                maxLength={SOLUTION_MAX + 100}
+                style={errors.solution ? { borderColor: 'var(--danger)' } : undefined}
               />
             </Field>
 
-            {/* Errors */}
+            {/* API error */}
             {(createIssue.isError || createSolution.isError) && (
-              <div className="text-sm" style={{ color: 'var(--danger)' }}>
+              <div className="text-sm" style={{ color: 'var(--danger)', padding: '8px 12px', background: 'color-mix(in srgb, var(--danger) 10%, transparent)', borderRadius: 6 }}>
                 {createIssue.error instanceof Error
                   ? createIssue.error.message
                   : createSolution.error instanceof Error
@@ -257,7 +370,7 @@ export default function NewIssuePage() {
                 Cancel
               </Button>
               <Button type="submit" variant="accent" disabled={isSubmitting || uploading}>
-                {isSubmitting ? 'Submitting...' : 'Submit Issue'}
+                {isSubmitting ? 'Submitting…' : 'Submit Issue'}
               </Button>
             </div>
           </form>

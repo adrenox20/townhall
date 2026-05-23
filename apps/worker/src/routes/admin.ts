@@ -19,7 +19,11 @@ adminRoutes.get('/staff', async (c) => {
 });
 adminRoutes.get('/analytics', async (c) => ok(c, await issueMetrics(c)));
 adminRoutes.get('/sla', async (c) => ok(c, (await c.env.DB.prepare('SELECT * FROM issues WHERE sla_due_at < datetime("now") AND status NOT IN ("resolved", "archived", "rejected")').all()).results));
-adminRoutes.get('/issues', async (c) => ok(c, (await c.env.DB.prepare('SELECT * FROM issues WHERE is_deleted = 0 ORDER BY created_at DESC').all()).results));
-adminRoutes.get('/kanban', async (c) => ok(c, (await c.env.DB.prepare('SELECT * FROM issues WHERE is_deleted = 0 ORDER BY created_at DESC').all()).results));
+adminRoutes.get('/issues', async (c) => ok(c, (await c.env.DB.prepare('SELECT * FROM issues WHERE is_deleted = 0 AND master_issue_id IS NULL ORDER BY created_at DESC').all()).results));
+adminRoutes.get('/kanban', async (c) => ok(c, (await c.env.DB.prepare(
+  `SELECT id, public_id, title, status, urgency, assignee_id, sla_due_at, category_id,
+    (SELECT COUNT(*) FROM issue_votes v WHERE v.issue_id = issues.id) AS votes
+   FROM issues WHERE is_deleted = 0 AND master_issue_id IS NULL ORDER BY created_at DESC`
+).all()).results));
 adminRoutes.post('/reports/export', async (c) => ok(c, { url: null, status: 'queued' }));
 adminRoutes.all('/:resource{categories|tags|departments}/*?', requirePermission('settings:manage'), async (c) => ok(c, { resource: c.req.param('resource'), managed: true }));

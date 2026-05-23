@@ -27,13 +27,11 @@ function AnalyticsContent() {
   const total = (data?.byStatus ?? []).reduce((s, r) => s + r.count, 0);
   const resolved = (data?.byStatus ?? []).find(r => r.status === 'resolved')?.count ?? 0;
   const open = (data?.byStatus ?? []).find(r => r.status === 'open')?.count ?? 0;
-  const pending = (data?.byStatus ?? []).find(r => r.status === 'pending_review')?.count ?? 0;
   const inProgress = (data?.byStatus ?? [])
     .filter(r => ['in_progress', 'under_investigation', 'escalated'].includes(r.status))
     .reduce((s, r) => s + r.count, 0);
 
   const statusColors: Record<string, string> = {
-    pending_review: 'var(--info)',
     open: 'var(--info)',
     under_investigation: 'var(--warning)',
     in_progress: 'var(--warning)',
@@ -54,7 +52,7 @@ function AnalyticsContent() {
         <Stat label="Total issues" value={String(total)} />
         <Stat label="Resolved" value={String(resolved)} delta={total > 0 ? `${Math.round((resolved / total) * 100)}% resolution rate` : ''} deltaDir="up" hint="" />
         <Stat label="In progress" value={String(inProgress)} />
-        <Stat label="Pending review" value={String(pending)} />
+        <Stat label="Open" value={String(open)} />
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -62,7 +60,7 @@ function AnalyticsContent() {
         <div className="card" style={{ padding: 20 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Issues by status</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {(data?.byStatus ?? []).map(row => (
+            {(data?.byStatus ?? []).filter(row => row.status !== 'pending_review').map(row => (
               <BarRow
                 key={row.status}
                 label={statusLabels[row.status] ?? row.status}

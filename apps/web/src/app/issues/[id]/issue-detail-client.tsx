@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { statusLabels, statuses } from '@/lib/constants';
-import { useIssue, useIssues, useUpdateIssueStatus, useAssignIssue, useVoteIssue, useMergeIssue } from '@/hooks/use-issues';
+import { useIssue, useIssues, useUpdateIssueStatus, useAssignIssue, useVoteIssue, useMergeIssue, useDeleteIssue } from '@/hooks/use-issues';
 import type { ApiIssue } from '@/hooks/use-issues';
 import { useComments, useCreateComment } from '@/hooks/use-comments';
 import { useSolutions } from '@/hooks/use-solutions';
@@ -26,8 +26,7 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// Visible statuses — pending_review is internal/removed
-const VISIBLE_STATUSES = statuses.filter(s => s !== 'pending_review');
+const VISIBLE_STATUSES = statuses;
 
 /* ── Merge Modal ─────────────────────────────────────────────────────────── */
 function MergeModal({
@@ -203,6 +202,100 @@ function MergeModal({
   );
 }
 
+/* ── Delete Modal ────────────────────────────────────────────────────────── */
+function DeleteIssueModal({
+  issueTitle,
+  onClose,
+  onConfirm,
+  isPending,
+}: {
+  issueTitle: string;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+  isPending: boolean;
+}) {
+  const [reason, setReason] = useState('');
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+        padding: '20px',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: 'var(--bg-elev)', borderRadius: 16,
+        border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
+        width: '100%', maxWidth: 460,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '18px 20px', borderBottom: '1px solid var(--border)',
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--danger)' }}>Delete issue</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-subtle)', marginTop: 2 }}>This action cannot be undone</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-muted)', padding: 4, borderRadius: 6 }}
+          >
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.5, margin: 0 }}>
+            You are about to permanently delete{' '}
+            <strong style={{ color: 'var(--fg)' }}>&ldquo;{issueTitle}&rdquo;</strong>.
+            The author will be notified with your reason.
+          </p>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg-muted)', display: 'block', marginBottom: 6 }}>
+              Reason <span style={{ color: 'var(--danger)' }}>*</span>
+            </label>
+            <textarea
+              className="textarea"
+              rows={3}
+              placeholder="e.g. Abusive language, spam, or duplicate report…"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              style={{ resize: 'none' }}
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex', justifyContent: 'flex-end', gap: 8,
+          padding: '14px 20px', borderTop: '1px solid var(--border)',
+        }}>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={!reason.trim() || isPending}
+            onClick={() => reason.trim() && onConfirm(reason.trim())}
+            style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}
+          >
+            {isPending ? 'Deleting…' : 'Delete issue'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main detail component ─────────────────────────────────────────────────── */
 function IssueDetailContent() {
   const { user } = useAuth();
@@ -225,12 +318,14 @@ function IssueDetailContent() {
   const assignIssue = useAssignIssue();
   const voteIssue = useVoteIssue();
   const mergeIssue = useMergeIssue();
+  const deleteIssue = useDeleteIssue();
   const createComment = useCreateComment();
 
   const [commentBody, setCommentBody] = useState('');
   const [voted, setVoted] = useState(false);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (issue?.has_voted) setVoted(true);
@@ -265,6 +360,7 @@ function IssueDetailContent() {
   const canUpdateStatus = hasPermission(user, 'issue:status_update');
   const canAssign = hasPermission(user, 'issue:assign');
   const canMerge = hasPermission(user, 'issue:merge');
+  const canDeleteAny = hasPermission(user, 'issue:delete_any');
   const daysOpen = Math.floor((Date.now() - new Date(issue.created_at).getTime()) / 86400000);
 
   function handleStatusChange(newStatus: string) {
@@ -304,15 +400,32 @@ function IssueDetailContent() {
     );
   }
 
+  function handleDelete(reason: string) {
+    deleteIssue.mutate(
+      { id: issue!.id, reason },
+      { onSuccess: () => { setShowDeleteModal(false); pushToast('Issue deleted', 'check'); window.location.href = '/issues'; } }
+    );
+  }
+
   return (
     <>
-      {/* Merge modal portal */}
+      {/* Merge modal */}
       {showMergeModal && issue && (
         <MergeModal
           issue={issue}
           onClose={() => setShowMergeModal(false)}
           onMerge={handleMerge}
           isPending={mergeIssue.isPending}
+        />
+      )}
+
+      {/* Delete modal */}
+      {showDeleteModal && issue && (
+        <DeleteIssueModal
+          issueTitle={issue.title}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDelete}
+          isPending={deleteIssue.isPending}
         />
       )}
 
@@ -347,22 +460,7 @@ function IssueDetailContent() {
           </button>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 className="page-title" style={{ fontSize: 28, marginBottom: 8 }}>{issue.title}</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--fg-muted)', fontSize: 13, flexWrap: 'wrap' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span className="avatar avatar--sm" style={{ background: 'var(--accent)', color: 'white', borderColor: 'transparent', fontSize: 9 }}>
-                  {issue.is_anonymous ? '?' : getInitials(issue.author?.name ?? '?')}
-                </span>
-                {issue.is_anonymous ? 'Anonymous' : (issue.author?.name ?? 'Unknown')}
-              </span>
-              <span style={{ width: 3, height: 3, borderRadius: 999, background: 'var(--fg-subtle)', opacity: 0.5 }} />
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Icon name="clock" size={12} />
-                {new Date(issue.created_at).toLocaleDateString()}
-              </span>
-              <Badge variant={issue.status as never}>{statusLabels[issue.status] || issue.status}</Badge>
-              <Badge variant={issue.urgency === 'critical' ? 'danger' : 'subtle'}>{issue.urgency}</Badge>
-            </div>
+            <h1 className="page-title" style={{ fontSize: 28, marginBottom: 0 }}>{issue.title}</h1>
           </div>
         </div>
 
@@ -430,6 +528,76 @@ function IssueDetailContent() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Merged duplicates — full info, left column, before Activity */}
+            {(issue.merged_issues ?? []).length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="git-merge" size={15} style={{ color: 'var(--fg-muted)' }} />
+                    <h2 className="font-semibold" style={{ fontSize: 15 }}>
+                      Merged duplicates ({issue.merged_issues!.length})
+                    </h2>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+                    These issues were marked as duplicates and merged into this one
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {issue.merged_issues!.map(m => (
+                      <div key={m.id} style={{
+                        padding: '14px 16px', borderRadius: 10,
+                        background: 'var(--bg-muted)', border: '1px solid var(--border)',
+                      }}>
+                        {/* Header row */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                          <Icon name="git-merge" size={13} style={{ color: 'var(--fg-subtle)', flexShrink: 0, marginTop: 3 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 2 }}>{m.title}</div>
+                            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-subtle)' }}>{m.public_id}</span>
+                          </div>
+                        </div>
+                        {/* Description preview */}
+                        {m.description && (
+                          <p style={{
+                            fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg-muted)',
+                            margin: '0 0 10px 0',
+                            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                          }}>
+                            {m.description}
+                          </p>
+                        )}
+                        {/* Meta row */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--fg-muted)', flexWrap: 'wrap' }}>
+                          {/* Reporter */}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <span className="avatar avatar--sm" style={{ background: 'var(--bg-elev)', fontSize: 8 }}>
+                              {m.is_anonymous || !m.author_name ? '?' : getInitials(m.author_name)}
+                            </span>
+                            {m.is_anonymous || !m.author_name ? 'Anonymous' : m.author_name}
+                          </span>
+                          <span style={{ width: 3, height: 3, borderRadius: 999, background: 'currentColor', opacity: 0.4 }} />
+                          {/* Urgency */}
+                          <Badge variant={m.urgency === 'critical' ? 'danger' : 'subtle'} style={{ fontSize: 10 }}>{m.urgency}</Badge>
+                          <span style={{ width: 3, height: 3, borderRadius: 999, background: 'currentColor', opacity: 0.4 }} />
+                          {/* Votes */}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Icon name="arrow-up" size={11} />
+                            {m.votes ?? 0}
+                          </span>
+                          {/* Comments */}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Icon name="msg" size={11} />
+                            {m.comments_count ?? 0}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Activity timeline */}
             <Card>
@@ -520,11 +688,12 @@ function IssueDetailContent() {
                     )}
                   </DetailRow>
 
-                  {issue.category && (
-                    <DetailRow label="Category">
-                      <Badge variant="subtle">{issue.category.name}</Badge>
-                    </DetailRow>
-                  )}
+                  <DetailRow label="Category">
+                    {issue.category
+                      ? <Badge variant="subtle">{issue.category.name}</Badge>
+                      : <span style={{ color: 'var(--fg-subtle)', fontSize: 12 }}>None</span>
+                    }
+                  </DetailRow>
 
                   <DetailRow label="Urgency">
                     <span style={{ fontSize: 13, textTransform: 'capitalize' }}>{issue.urgency}</span>
@@ -593,7 +762,7 @@ function IssueDetailContent() {
                     </div>
                   )}
 
-                  {/* Merge issue button */}
+                  {/* Merge issue button — moderators and portal admins only */}
                   {canMerge && (
                     <Button
                       variant="outline"
@@ -603,6 +772,21 @@ function IssueDetailContent() {
                       onClick={() => setShowMergeModal(true)}
                     >
                       Merge issue…
+                    </Button>
+                  )}
+
+                  {/* Delete issue button — moderators and portal admin */}
+                  {canDeleteAny && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      block
+                      icon="trash"
+                      onClick={() => setShowDeleteModal(true)}
+                      disabled={deleteIssue.isPending}
+                      style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                    >
+                      Delete issue
                     </Button>
                   )}
                 </div>
@@ -626,37 +810,6 @@ function IssueDetailContent() {
                       <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--fg)' }}>{solution.body}</p>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Merged duplicates */}
-            {(issue.merged_issues ?? []).length > 0 && (
-              <Card>
-                <CardHeader>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Icon name="git-merge" size={14} style={{ color: 'var(--fg-muted)' }} />
-                    <h2 className="font-semibold">Merged duplicates ({issue.merged_issues!.length})</h2>
-                  </div>
-                  <p style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Issues marked as duplicates of this one</p>
-                </CardHeader>
-                <CardContent>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {issue.merged_issues!.map(m => (
-                      <div key={m.id} style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 10,
-                        padding: '10px 12px', borderRadius: 8,
-                        background: 'var(--bg-muted)', border: '1px solid var(--border)',
-                      }}>
-                        <Icon name="git-merge" size={13} style={{ color: 'var(--fg-subtle)', flexShrink: 0, marginTop: 2 }} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.35 }}>{m.title}</div>
-                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--fg-subtle)', marginTop: 3 }}>{m.public_id}</div>
-                        </div>
-                        <Badge variant={m.status as never} style={{ flexShrink: 0 }}>{statusLabels[m.status] || m.status}</Badge>
-                      </div>
-                    ))}
-                  </div>
                 </CardContent>
               </Card>
             )}

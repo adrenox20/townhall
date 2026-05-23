@@ -11,14 +11,44 @@ export const portalRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 portalRoutes.use('*', requireAuth());
 portalRoutes.get('/dashboard', requirePermission('analytics:platform_read'), async (c) => ok(c, await issueMetrics(c)));
 portalRoutes.get('/users', requirePermission('admin:manage'), async (c) => {
-  const users = (await c.env.DB.prepare('SELECT id, email, name, status, created_at, last_login_at FROM users ORDER BY created_at DESC').all()).results;
-  const roles = (await c.env.DB.prepare('SELECT user_id, role_id FROM user_roles').all()).results as { user_id: string; role_id: string }[];
-  const rolesByUser: Record<string, string[]> = {};
-  for (const r of roles) {
-    if (!rolesByUser[r.user_id]) rolesByUser[r.user_id] = [];
-    rolesByUser[r.user_id].push(r.role_id);
+  const search = c.req.query('search') ?? '';
+  const limit = Math.min(Number(c.req.query('limit') || 20), 100);
+  const page = Math.max(Number(c.req.query('page') || 1), 1);
+  const offset = (page - 1) * limit;
+  const q = `%${search}%`;
+
+  const [usersRes, countRes] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT id, email, name, status, created_at, last_login_at FROM users
+       WHERE (name LIKE ? OR email LIKE ?)
+       ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    ).bind(q, q, limit, offset).all(),
+    c.env.DB.prepare(
+      `SELECT COUNT(*) as total FROM users WHERE (name LIKE ? OR email LIKE ?)`
+    ).bind(q, q).first<{ total: number }>(),
+  ]);
+
+  const users = usersRes.results as { id: string }[];
+  const userIds = users.map(u => u.id);
+  let rolesByUser: Record<string, string[]> = {};
+
+  if (userIds.length > 0) {
+    const placeholders = userIds.map(() => '?').join(',');
+    const roles = (await c.env.DB.prepare(
+      `SELECT user_id, role_id FROM user_roles WHERE user_id IN (${placeholders})`
+    ).bind(...userIds).all()).results as { user_id: string; role_id: string }[];
+    for (const r of roles) {
+      if (!rolesByUser[r.user_id]) rolesByUser[r.user_id] = [];
+      rolesByUser[r.user_id].push(r.role_id);
+    }
   }
-  return ok(c, (users as { id: string }[]).map(u => ({ ...u, roles: rolesByUser[u.id] ?? [] })));
+
+  return ok(c, {
+    items: users.map(u => ({ ...u, roles: rolesByUser[u.id] ?? [] })),
+    total: countRes?.total ?? 0,
+    page,
+    limit,
+  });
 });
 portalRoutes.patch('/users/:id/role', requirePermission('rbac:manage'), zValidator('json', z.object({ roleId: z.string(), departmentId: z.string().nullable().optional(), action: z.enum(['grant', 'revoke']).default('grant') })), async (c) => {
   const body = c.req.valid('json');

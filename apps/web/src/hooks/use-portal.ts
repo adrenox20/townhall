@@ -32,10 +32,25 @@ export function usePortalDashboard() {
   });
 }
 
-export function usePortalUsers() {
+export interface PortalUsersParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export interface PortalUsersPage {
+  items: PortalUser[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export function usePortalUsers(params: PortalUsersParams = {}) {
+  const { page = 1, limit = 20, search = '' } = params;
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit), ...(search && { search }) }).toString();
   return useQuery({
-    queryKey: ['portal', 'users'],
-    queryFn: () => api<PortalUser[]>('/portal/users'),
+    queryKey: ['portal', 'users', page, limit, search],
+    queryFn: () => api<PortalUsersPage>(`/portal/users?${qs}`),
     staleTime: 30 * 1000,
   });
 }

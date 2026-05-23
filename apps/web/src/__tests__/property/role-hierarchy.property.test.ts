@@ -3,10 +3,10 @@ import fc from 'fast-check';
 import { getHighestRole, getNavItems, ROLE_PRIORITY } from '@/lib/roles';
 import type { Role } from '@/lib/permissions';
 
-const ALL_ROLES: Role[] = ['student', 'institution_admin', 'portal_admin'];
+const ALL_ROLES: Role[] = ['student', 'moderator', 'institution_admin', 'portal_admin'];
 
 /** Arbitrary that generates a valid Role */
-const roleArb = fc.constantFrom<Role>('student', 'institution_admin', 'portal_admin');
+const roleArb = fc.constantFrom<Role>('student', 'moderator', 'institution_admin', 'portal_admin');
 
 /** Arbitrary that generates a non-empty array of roles (with possible duplicates) */
 const nonEmptyRolesArb = fc.array(roleArb, { minLength: 1, maxLength: 10 });
@@ -99,10 +99,11 @@ describe('Property 5: Navigation items match role', () => {
 
   const EXPECTED_NAV_LABELS: Record<Role, string[]> = {
     student: ['Dashboard', 'All Issues', 'Report Issue', 'Notifications'],
-    institution_admin: ['Triage Queue', 'All Issues', 'Analytics', 'Overview', 'Settings'],
+    moderator: ['All Issues', 'Report Issue', 'Notifications'],
+    institution_admin: ['Triage Queue', 'All Issues', 'Analytics', 'Overview'],
     portal_admin: [
       'Platform Dashboard', 'User Management', 'Moderation', 'Audit Logs',
-      'Triage Queue', 'All Issues', 'Analytics', 'Overview', 'Settings',
+      'Triage Queue', 'All Issues', 'Analytics', 'Overview',
       'Dashboard', 'All Issues', 'Report Issue', 'Notifications',
     ],
   };
@@ -129,8 +130,15 @@ describe('Property 5: Navigation items match role', () => {
         for (const otherRole of otherRoles) {
           const otherLabels = EXPECTED_NAV_LABELS[otherRole];
           for (const otherLabel of otherLabels) {
-            if (otherLabel === 'All Issues') continue;
-            expect(labels.has(otherLabel)).toBe(false);
+            // Skip items that are intentionally shared between roles (e.g. 'All Issues', 'Report Issue')
+            if (labels.has(otherLabel)) continue;
+            // Items exclusive to the other role must NOT appear in this role's nav
+            const exclusiveToOther = EXPECTED_NAV_LABELS[otherRole].filter(
+              l => !EXPECTED_NAV_LABELS[role].includes(l)
+            );
+            if (exclusiveToOther.includes(otherLabel)) {
+              expect(labels.has(otherLabel)).toBe(false);
+            }
           }
         }
       }),

@@ -1,7 +1,7 @@
-export type RoleName = 'student' | 'institution_admin' | 'portal_admin';
+export type RoleName = 'student' | 'moderator' | 'institution_admin' | 'portal_admin';
 export type Permission =
   | 'issue:create' | 'issue:read_public' | 'issue:update_own' | 'issue:update_any'
-  | 'issue:delete_own_pre_review' | 'issue:status_update' | 'issue:assign'
+  | 'issue:delete_own_pre_review' | 'issue:delete_any' | 'issue:status_update' | 'issue:assign'
   | 'issue:merge' | 'issue:archive' | 'comment:create' | 'comment:moderate'
   | 'solution:create' | 'solution:review' | 'solution:official_select'
   | 'analytics:institution_read' | 'analytics:platform_read' | 'settings:manage'

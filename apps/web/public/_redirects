@@ -1,3 +1,6 @@
 /issues/new  /issues/new/  301
-/issues/:id  /issues/_/  200
-/issues/:id/  /issues/_/  200
+/issues/new/  /new-issue/index.html  200
+/issues/GRV-:id  /issues/_/  200
+/issues/GRV-:id/  /issues/_/  200
+/issues/issue_:id  /issues/_/  200
+/issues/issue_:id/  /issues/_/  200

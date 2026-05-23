@@ -1,8 +1,9 @@
 import type { Role } from './permissions';
 
 export const ROLE_PRIORITY: Record<Role, number> = {
-  portal_admin: 3,
-  institution_admin: 2,
+  portal_admin: 4,
+  institution_admin: 3,
+  moderator: 2,
   student: 1,
 };
 
@@ -24,6 +25,12 @@ const STUDENT_NAV: NavItem[] = [
   { href: '/notifications', label: 'Notifications', icon: 'bell' },
 ];
 
+const MODERATOR_NAV: NavItem[] = [
+  { href: '/issues', label: 'All Issues', icon: 'list' },
+  { href: '/issues/new', label: 'Report Issue', icon: 'plus-circle' },
+  { href: '/notifications', label: 'Notifications', icon: 'bell' },
+];
+
 const INSTITUTION_ADMIN_NAV: NavItem[] = [
   { href: '/admin/kanban', label: 'Triage Queue', icon: 'kanban' },
   { href: '/issues', label: 'All Issues', icon: 'list' },
@@ -40,6 +47,7 @@ const PORTAL_ADMIN_NAV: NavItem[] = [
 
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   student: STUDENT_NAV,
+  moderator: MODERATOR_NAV,
   institution_admin: INSTITUTION_ADMIN_NAV,
   portal_admin: PORTAL_ADMIN_NAV,
 };
@@ -66,6 +74,9 @@ export function getNavSections(role: Role): NavSection[] {
   }
   if (role === 'institution_admin') {
     return [{ label: 'Staff', items: INSTITUTION_ADMIN_NAV }];
+  }
+  if (role === 'moderator') {
+    return [{ label: 'Moderation', items: MODERATOR_NAV }];
   }
   return [{ label: 'Browse', items: STUDENT_NAV }];
 }

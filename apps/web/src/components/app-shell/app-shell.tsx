@@ -7,7 +7,7 @@ import { useTheme } from 'next-themes';
 import { useApp } from '@/context/app-context';
 import { useAuth } from '@/lib/auth';
 import { getHighestRole, getNavSections } from '@/lib/roles';
-import { useNotifications } from '@/hooks/use-notifications';
+import { useNotifications, useMarkNotificationsRead } from '@/hooks/use-notifications';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { ToastWrap } from '@/components/ui/toast';
@@ -35,9 +35,15 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const router = useRouter();
   const { data: notifications } = useNotifications();
+  const markRead = useMarkNotificationsRead();
 
   const role = getHighestRole(user?.roles ?? []);
   const sections = getNavSections(role);
+  // Only the most specific matching href gets the active class (prevents /admin matching /admin/kanban etc.)
+  const activeHref = sections
+    .flatMap(s => s.items)
+    .filter(n => pathname === n.href || pathname.startsWith(n.href + '/'))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
   const notificationCount = notifications?.filter((n) => !n.is_read).length ?? 0;
   const recentNotifs = (notifications ?? []).slice(0, 4);
 
@@ -54,9 +60,9 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
 
       <aside className={`sidebar${mobileNavOpen ? ' sidebar--open' : ''}`}>
         <div className="brand">
-          <img src="/logo.svg" alt="Campus Issues" className="brand-mark" style={{ padding: 0, objectFit: 'contain', background: 'transparent' }} />
+          <img src="/logo.svg" alt="Town Hall" className="brand-mark" style={{ padding: 0, objectFit: 'contain', background: 'transparent' }} />
           <div>
-            <div className="brand-name">Campus Issues</div>
+            <div className="brand-name">Town Hall</div>
             <div className="brand-sub">Rishihood Univ.</div>
           </div>
         </div>
@@ -69,7 +75,7 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
                 key={n.href}
                 href={n.href}
                 onClick={closeMobileNav}
-                className={`nav-item${pathname === n.href || pathname.startsWith(n.href + '/') ? ' active' : ''}`}
+                className={`nav-item${n.href === activeHref ? ' active' : ''}`}
               >
                 <Icon name={n.icon} size={15} />
                 <span>{n.label}</span>
@@ -90,11 +96,6 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
             icon="menu"
             aria-label="Open navigation"
           />
-
-          <div className="search-wrap">
-            <Icon name="search" size={14} className="search-icon" />
-            <input className="search-input" placeholder="Search issues..." />
-          </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Button
@@ -134,7 +135,22 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
                     <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--fg-subtle)', fontSize: 13 }}>No notifications</div>
                   ) : (
                     recentNotifs.map((n) => (
-                      <div key={n.id} style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                      <div
+                        key={n.id}
+                        style={{
+                          padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 12,
+                          cursor: n.issue_id ? 'pointer' : 'default',
+                          opacity: n.is_read ? 0.7 : 1,
+                          borderLeft: n.is_read ? '2px solid transparent' : '2px solid var(--accent)',
+                        }}
+                        onClick={() => {
+                          if (n.issue_id) {
+                            markRead.mutate();
+                            router.push(`/issues/${n.issue_id}`);
+                            setNotifOpen(false);
+                          }
+                        }}
+                      >
                         <div style={{ fontWeight: 600 }}>{n.title}</div>
                         {n.body && <div style={{ color: 'var(--fg-subtle)', marginTop: 2 }}>{n.body}</div>}
                       </div>
@@ -144,14 +160,15 @@ function ShellInner({ children, pathname }: { children: React.ReactNode; pathnam
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 8, marginLeft: 4, borderLeft: '1px solid var(--border)' }}>
-              <span className="avatar avatar--sm" style={{ background: 'var(--accent)', color: 'white', borderColor: 'transparent' }} title={user?.name ?? ''}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 8, marginLeft: 4, borderLeft: '1px solid var(--border)' }}>
+              <span className="avatar avatar--sm" style={{ background: 'var(--accent)', color: 'white', borderColor: 'transparent', flexShrink: 0 }} title={user?.name ?? ''}>
                 {user?.name ? getInitials(user.name) : '?'}
               </span>
-              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                 <span style={{ fontSize: 12.5, fontWeight: 600 }}>{user?.name ?? 'User'}</span>
+                <span style={{ fontSize: 10.5, color: 'var(--fg-subtle)' }}>·</span>
                 <span style={{ fontSize: 10.5, color: 'var(--fg-subtle)' }}>
-                  {role === 'portal_admin' ? 'Portal Admin' : role === 'institution_admin' ? 'Staff' : 'Student'}
+                  {role === 'portal_admin' ? 'Portal Admin' : role === 'institution_admin' ? 'Staff' : role === 'moderator' ? 'Moderator' : 'Student'}
                 </span>
               </div>
               <Button variant="ghost" size="icon" onClick={() => logout()} icon="log-out" title="Logout" aria-label="Logout" />

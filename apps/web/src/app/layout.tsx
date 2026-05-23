@@ -27,7 +27,7 @@ const jbMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Campus Issues — Rishihood University',
+  title: 'Town Hall — Rishihood University',
   description: 'Report what\'s broken, upvote what matters, and watch progress in real time.',
   icons: {
     icon: '/logo.svg',
