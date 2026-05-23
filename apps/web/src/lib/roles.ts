@@ -36,6 +36,7 @@ const INSTITUTION_ADMIN_NAV: NavItem[] = [
   { href: '/issues', label: 'All Issues', icon: 'list' },
   { href: '/admin/analytics', label: 'Analytics', icon: 'bar-chart-3' },
   { href: '/admin', label: 'Overview', icon: 'layout-dashboard' },
+  { href: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
 
 const PORTAL_ADMIN_NAV: NavItem[] = [
@@ -45,12 +46,6 @@ const PORTAL_ADMIN_NAV: NavItem[] = [
   { href: '/portal/audit', label: 'Audit Logs', icon: 'scroll-text' },
 ];
 
-const NAV_BY_ROLE: Record<Role, NavItem[]> = {
-  student: STUDENT_NAV,
-  moderator: MODERATOR_NAV,
-  institution_admin: INSTITUTION_ADMIN_NAV,
-  portal_admin: PORTAL_ADMIN_NAV,
-};
 
 export function getHighestRole(roles: Role[]): Role {
   if (roles.length === 0) return 'student';

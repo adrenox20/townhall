@@ -3,28 +3,28 @@ main = "src/index.ts"
 compatibility_date = "2026-05-22"
 
 routes = [
-  { pattern = "yourdomain.com/*", zone_name = "yourdomain.com" }
+  { pattern = "live.rutownhall.live/*", zone_name = "rutownhall.live" }
 ]
 
 [vars]
-FRONTEND_URL = "https://yourdomain.com"
-ALLOWED_EMAIL_DOMAIN = "youruniversity.edu"
-ALLOWED_EMAIL_DOMAINS = "youruniversity.edu"
-GOOGLE_CLIENT_ID = "REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+FRONTEND_URL = "https://rutownhall.live"
+ALLOWED_EMAIL_DOMAIN = "rishihood.edu.in"
+ALLOWED_EMAIL_DOMAINS = "rishihood.edu.in"
+GOOGLE_CLIENT_ID = "968761038415-dsp50r3h47b32imjd7nj4m9u2vjm623k.apps.googleusercontent.com"
 SESSION_TTL_SECONDS = "604800"
 ISSUE_EDIT_WINDOW_MINUTES = "30"
 DUPLICATE_LIKELY_THRESHOLD = "0.78"
 DUPLICATE_RELATED_THRESHOLD = "0.55"
-INITIAL_PORTAL_ADMIN_EMAIL = "admin@youruniversity.edu"
+INITIAL_PORTAL_ADMIN_EMAIL = "yash.l23csai@nst.rishihood.edu.in"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "university-grievance-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "92eaa9b4-14fc-4922-b64e-20a77b72336b"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "f1a64973eb324afc82e48a4fe4402f40"
 
 [[r2_buckets]]
 binding = "R2"
@@ -51,5 +51,5 @@ new_sqlite_classes = ["IssueRoom", "NotificationHub"]
 
 [env.local]
 FRONTEND_URL = "http://localhost:3000"
-ALLOWED_EMAIL_DOMAINS = "youruniversity.edu"
-GOOGLE_CLIENT_ID = "REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+ALLOWED_EMAIL_DOMAINS = "rishihood.edu.in"
+GOOGLE_CLIENT_ID = "968761038415-dsp50r3h47b32imjd7nj4m9u2vjm623k.apps.googleusercontent.com"

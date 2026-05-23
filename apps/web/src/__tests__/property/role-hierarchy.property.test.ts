@@ -100,10 +100,10 @@ describe('Property 5: Navigation items match role', () => {
   const EXPECTED_NAV_LABELS: Record<Role, string[]> = {
     student: ['Dashboard', 'All Issues', 'Report Issue', 'Notifications'],
     moderator: ['All Issues', 'Report Issue', 'Notifications'],
-    institution_admin: ['Triage Queue', 'All Issues', 'Analytics', 'Overview'],
+    institution_admin: ['Triage Queue', 'All Issues', 'Analytics', 'Overview', 'Settings'],
     portal_admin: [
       'Platform Dashboard', 'User Management', 'Moderation', 'Audit Logs',
-      'Triage Queue', 'All Issues', 'Analytics', 'Overview',
+      'Triage Queue', 'All Issues', 'Analytics', 'Overview', 'Settings',
       'Dashboard', 'All Issues', 'Report Issue', 'Notifications',
     ],
   };
