@@ -20,7 +20,7 @@ const writeIssue = z.object({
   department_id: z.string().optional(),
   categoryId: z.string().optional(),
   departmentId: z.string().optional(),
-  urgency: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
+  urgency: z.enum(['low', 'medium', 'high']).default('medium'),
   isAnonymous: z.boolean().default(false),
   is_anonymous: z.boolean().optional(),
   tags: z.array(z.string()).default([]),

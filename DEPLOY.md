@@ -5,7 +5,7 @@
 | Path | Target |
 |------|--------|
 | `https://rutownhall.live/*` | Cloudflare Pages (Next.js static `apps/web/out`) |
-| `https://rutownhall.live/api/*` | Cloudflare Worker (`apps/worker`) |
+| `https://api.rutownhall.live/*` | Cloudflare Worker (`apps/worker`) |
 
 Same-origin cookies require API and web on **one hostname**.
 
@@ -44,7 +44,7 @@ npm run build
 # Deploy ./out to Cloudflare Pages project, custom domain rutownhall.live
 ```
 
-Production env is in `.env.production` (`NEXT_PUBLIC_API_URL=https://rutownhall.live/api/v1`).
+Production env is in `.env.production` (`NEXT_PUBLIC_API_URL=https://api.rutownhall.live/api/v1`).
 
 ## First portal admin
 

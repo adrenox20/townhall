@@ -122,6 +122,20 @@ export function useCreateIssue() {
   });
 }
 
+export function useUpdateIssue() {
+  const queryClient = useQueryClient();
+  const { pushToast } = useApp();
+  return useMutation({
+    mutationFn: ({ id, title, description, urgency, category_id }: { id: string; title?: string; description?: string; urgency?: string; category_id?: string }) =>
+      api<{ updated: boolean }>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify({ title, description, urgency, category_id }) }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+      queryClient.invalidateQueries({ queryKey: ['issues', id] });
+    },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update issue', 'alert'); },
+  });
+}
+
 export function useUpdateIssueStatus() {
   const queryClient = useQueryClient();
   const { pushToast } = useApp();

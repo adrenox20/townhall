@@ -62,7 +62,15 @@ solutionRoutes.post('/issues/:id/solutions', zValidator('json', z.object({ body:
 });
 
 solutionRoutes.patch('/solutions/:id', zValidator('json', z.object({ body: z.string().min(5) })), async (c) => {
-  await c.env.DB.prepare('UPDATE solutions SET body = ?, updated_at = ? WHERE id = ? AND author_id = ?').bind(c.req.valid('json').body, now(), c.req.param('id'), c.get('user').id).run();
+  const user = c.get('user');
+  const canReview = user.permissions.includes('solution:review');
+  if (canReview) {
+    // Moderators can edit any solution
+    await c.env.DB.prepare('UPDATE solutions SET body = ?, updated_at = ? WHERE id = ?').bind(c.req.valid('json').body, now(), c.req.param('id')).run();
+  } else {
+    // Authors can only edit their own solutions
+    await c.env.DB.prepare('UPDATE solutions SET body = ?, updated_at = ? WHERE id = ? AND author_id = ?').bind(c.req.valid('json').body, now(), c.req.param('id'), user.id).run();
+  }
   return ok(c, { updated: true });
 });
 

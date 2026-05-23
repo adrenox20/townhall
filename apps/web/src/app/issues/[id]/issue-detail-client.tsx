@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { statusLabels, statuses } from '@/lib/constants';
-import { useIssue, useIssues, useUpdateIssueStatus, useAssignIssue, useVoteIssue, useMergeIssue, useDeleteIssue } from '@/hooks/use-issues';
+import { useIssue, useIssues, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, useVoteIssue, useMergeIssue, useDeleteIssue } from '@/hooks/use-issues';
 import type { ApiIssue } from '@/hooks/use-issues';
-import { useComments, useCreateComment } from '@/hooks/use-comments';
-import { useSolutions } from '@/hooks/use-solutions';
+import { useComments, useCreateComment, useUpdateComment } from '@/hooks/use-comments';
+import { useSolutions, useUpdateSolution } from '@/hooks/use-solutions';
 import { useTimeline } from '@/hooks/use-timeline';
 import { useStaff } from '@/hooks/use-admin';
 import { RouteGuard } from '@/components/shared/route-guard';
@@ -315,17 +315,29 @@ function IssueDetailContent() {
   const { data: staff } = useStaff();
 
   const updateStatus = useUpdateIssueStatus();
+  const updateIssue = useUpdateIssue();
   const assignIssue = useAssignIssue();
   const voteIssue = useVoteIssue();
   const mergeIssue = useMergeIssue();
   const deleteIssue = useDeleteIssue();
   const createComment = useCreateComment();
+  const updateComment = useUpdateComment();
+  const updateSolution = useUpdateSolution();
 
   const [commentBody, setCommentBody] = useState('');
   const [voted, setVoted] = useState(false);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Moderator inline-edit state
+  const [editingIssueField, setEditingIssueField] = useState<'title' | 'description' | null>(null);
+  const [editIssueTitle, setEditIssueTitle] = useState('');
+  const [editIssueDesc, setEditIssueDesc] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentBody, setEditCommentBody] = useState('');
+  const [editingSolutionId, setEditingSolutionId] = useState<string | null>(null);
+  const [editSolutionBody, setEditSolutionBody] = useState('');
 
   useEffect(() => {
     if (issue?.has_voted) setVoted(true);
@@ -361,6 +373,7 @@ function IssueDetailContent() {
   const canAssign = hasPermission(user, 'issue:assign');
   const canMerge = hasPermission(user, 'issue:merge');
   const canDeleteAny = hasPermission(user, 'issue:delete_any');
+  const canModerate = hasPermission(user, 'comment:moderate') || hasPermission(user, 'issue:update_any');
   const daysOpen = Math.floor((Date.now() - new Date(issue.created_at).getTime()) / 86400000);
 
   function handleStatusChange(newStatus: string) {
@@ -405,6 +418,45 @@ function IssueDetailContent() {
       { id: issue!.id, reason },
       { onSuccess: () => { setShowDeleteModal(false); pushToast('Issue deleted', 'check'); window.location.href = '/issues'; } }
     );
+  }
+
+  function startEditIssueTitle() {
+    setEditIssueTitle(issue!.title);
+    setEditingIssueField('title');
+  }
+  function startEditIssueDesc() {
+    setEditIssueDesc(issue!.description);
+    setEditingIssueField('description');
+  }
+  function saveIssueEdit() {
+    const patch = editingIssueField === 'title'
+      ? { id: issue!.id, title: editIssueTitle.trim() }
+      : { id: issue!.id, description: editIssueDesc.trim() };
+    updateIssue.mutate(patch, {
+      onSuccess: () => { setEditingIssueField(null); pushToast('Issue updated', 'check'); },
+    });
+  }
+
+  function startEditComment(id: string, body: string) {
+    setEditingCommentId(id);
+    setEditCommentBody(body);
+  }
+  function saveCommentEdit() {
+    if (!editingCommentId) return;
+    updateComment.mutate({ commentId: editingCommentId, body: editCommentBody.trim() }, {
+      onSuccess: () => { setEditingCommentId(null); pushToast('Comment updated', 'check'); },
+    });
+  }
+
+  function startEditSolution(id: string, body: string) {
+    setEditingSolutionId(id);
+    setEditSolutionBody(body);
+  }
+  function saveEditSolution() {
+    if (!editingSolutionId) return;
+    updateSolution.mutate({ solutionId: editingSolutionId, body: editSolutionBody.trim() }, {
+      onSuccess: () => { setEditingSolutionId(null); pushToast('Solution updated', 'check'); },
+    });
   }
 
   return (
@@ -460,7 +512,34 @@ function IssueDetailContent() {
           </button>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 className="page-title" style={{ fontSize: 28, marginBottom: 0 }}>{issue.title}</h1>
+            {canModerate && editingIssueField === 'title' ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  className="input"
+                  style={{ flex: 1, fontSize: 22, fontWeight: 700 }}
+                  value={editIssueTitle}
+                  onChange={e => setEditIssueTitle(e.target.value)}
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') saveIssueEdit(); if (e.key === 'Escape') setEditingIssueField(null); }}
+                />
+                <Button size="sm" variant="primary" onClick={saveIssueEdit} disabled={updateIssue.isPending}>Save</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingIssueField(null)}>Cancel</Button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <h1 className="page-title" style={{ fontSize: 28, marginBottom: 0, flex: 1 }}>{issue.title}</h1>
+                {canModerate && (
+                  <button
+                    type="button"
+                    onClick={startEditIssueTitle}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-subtle)', padding: '6px 4px', marginTop: 4, borderRadius: 4, flexShrink: 0 }}
+                    title="Edit title"
+                  >
+                    <Icon name="edit" size={14} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -470,9 +549,38 @@ function IssueDetailContent() {
             {/* Description */}
             <Card>
               <CardContent>
-                <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fg)', whiteSpace: 'pre-wrap' }}>
-                  {issue.description || 'No further description provided.'}
-                </p>
+                {canModerate && editingIssueField === 'description' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <textarea
+                      className="textarea"
+                      rows={6}
+                      value={editIssueDesc}
+                      onChange={e => setEditIssueDesc(e.target.value)}
+                      autoFocus
+                      style={{ fontSize: 14, lineHeight: 1.65 }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingIssueField(null)}>Cancel</Button>
+                      <Button size="sm" variant="primary" onClick={saveIssueEdit} disabled={updateIssue.isPending}>Save</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative' }}>
+                    <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fg)', whiteSpace: 'pre-wrap', paddingRight: canModerate ? 28 : 0 }}>
+                      {issue.description || 'No further description provided.'}
+                    </p>
+                    {canModerate && (
+                      <button
+                        type="button"
+                        onClick={startEditIssueDesc}
+                        style={{ position: 'absolute', top: 0, right: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-subtle)', padding: 4, borderRadius: 4 }}
+                        title="Edit description"
+                      >
+                        <Icon name="edit" size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -496,8 +604,35 @@ function IssueDetailContent() {
                             <span className="comment-author">{comment.author?.name ?? 'Unknown'}</span>
                             {!!comment.is_official && <Badge variant="accent">Staff</Badge>}
                             <span className="comment-time">{new Date(comment.created_at).toLocaleDateString()}</span>
+                            {canModerate && editingCommentId !== comment.id && (
+                              <button
+                                type="button"
+                                onClick={() => startEditComment(comment.id, comment.body)}
+                                style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-subtle)', padding: '2px 4px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+                                title="Edit comment"
+                              >
+                                <Icon name="edit" size={12} /> Edit
+                              </button>
+                            )}
                           </div>
-                          <div className="comment-text">{comment.body}</div>
+                          {canModerate && editingCommentId === comment.id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                              <textarea
+                                className="textarea"
+                                rows={3}
+                                value={editCommentBody}
+                                onChange={e => setEditCommentBody(e.target.value)}
+                                autoFocus
+                                style={{ fontSize: 13 }}
+                              />
+                              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                <Button size="sm" variant="ghost" onClick={() => setEditingCommentId(null)}>Cancel</Button>
+                                <Button size="sm" variant="primary" onClick={saveCommentEdit} disabled={updateComment.isPending || !editCommentBody.trim()}>Save</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="comment-text">{comment.body}</div>
+                          )}
                         </div>
                       </div>
                     ))
@@ -806,8 +941,35 @@ function IssueDetailContent() {
                         </span>
                         <span style={{ fontWeight: 600 }}>{solution.author?.name ?? 'Anonymous'}</span>
                         {!!solution.is_official && <Badge variant="accent">Official</Badge>}
+                        {canModerate && editingSolutionId !== solution.id && (
+                          <button
+                            type="button"
+                            onClick={() => startEditSolution(solution.id, solution.body)}
+                            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-subtle)', padding: '2px 4px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+                            title="Edit solution"
+                          >
+                            <Icon name="edit" size={12} /> Edit
+                          </button>
+                        )}
                       </div>
-                      <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--fg)' }}>{solution.body}</p>
+                      {canModerate && editingSolutionId === solution.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <textarea
+                            className="textarea"
+                            rows={4}
+                            value={editSolutionBody}
+                            onChange={e => setEditSolutionBody(e.target.value)}
+                            autoFocus
+                            style={{ fontSize: 13 }}
+                          />
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            <Button size="sm" variant="ghost" onClick={() => setEditingSolutionId(null)}>Cancel</Button>
+                            <Button size="sm" variant="primary" onClick={saveEditSolution} disabled={updateSolution.isPending || !editSolutionBody.trim()}>Save</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--fg)' }}>{solution.body}</p>
+                      )}
                     </div>
                   ))}
                 </CardContent>

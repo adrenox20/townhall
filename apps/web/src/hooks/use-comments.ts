@@ -34,3 +34,14 @@ export function useCreateComment() {
     onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to post comment', 'alert'); },
   });
 }
+
+export function useUpdateComment() {
+  const queryClient = useQueryClient();
+  const { pushToast } = useApp();
+  return useMutation({
+    mutationFn: ({ commentId, body }: { commentId: string; body: string }) =>
+      api<{ updated: boolean }>(`/comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['comments'] }); },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update comment', 'alert'); },
+  });
+}

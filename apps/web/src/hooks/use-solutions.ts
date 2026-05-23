@@ -35,6 +35,17 @@ export function useCreateSolution() {
   });
 }
 
+export function useUpdateSolution() {
+  const queryClient = useQueryClient();
+  const { pushToast } = useApp();
+  return useMutation({
+    mutationFn: ({ solutionId, body }: { solutionId: string; body: string }) =>
+      api<{ updated: boolean }>(`/solutions/${solutionId}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['solutions'] }); },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update solution', 'alert'); },
+  });
+}
+
 export function useSelectOfficialSolution() {
   const queryClient = useQueryClient();
   const { pushToast } = useApp();

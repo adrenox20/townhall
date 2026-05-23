@@ -98,13 +98,16 @@ export default function NewIssuePage() {
     setUploading(true);
 
     for (const file of files) {
-      if (file.size > 10 * 1024 * 1024) {
-        setUploadError(`${file.name} exceeds the 10 MB limit.`);
+      const isVideo = file.type === 'video/mp4';
+      const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+      const maxLabel = isVideo ? '50 MB' : '10 MB';
+      if (file.size > maxSize) {
+        setUploadError(`${file.name} exceeds the ${maxLabel} limit.`);
         continue;
       }
-      const allowed = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+      const allowed = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'video/mp4'];
       if (!allowed.includes(file.type)) {
-        setUploadError(`${file.name} is not an allowed file type (PNG, JPEG, WebP, PDF).`);
+        setUploadError(`${file.name} is not an allowed file type (PNG, JPEG, WebP, PDF, MP4).`);
         continue;
       }
       try {
@@ -237,7 +240,6 @@ export default function NewIssuePage() {
                 <option value="low">Low — minor inconvenience</option>
                 <option value="medium">Medium — affects daily work</option>
                 <option value="high">High — significant disruption</option>
-                <option value="critical">Critical — immediate action needed</option>
               </Select>
             </Field>
 
@@ -270,7 +272,7 @@ export default function NewIssuePage() {
             </label>
 
             {/* Attachments */}
-            <Field label="Attachments" hint="Images or PDFs, max 10 MB each.">
+            <Field label="Attachments" hint="Images, PDFs, or MP4 videos, max 10 MB each.">
               <div className="space-y-2">
                 <div
                   style={{
@@ -287,13 +289,13 @@ export default function NewIssuePage() {
                 >
                   <Icon name="paperclip" size={20} className="mx-auto mb-1 text-foreground/40" />
                   <p className="text-sm text-foreground/60">
-                    {uploading ? 'Uploading…' : 'Click to attach images or PDFs'}
+                    {uploading ? 'Uploading…' : 'Click to attach images, PDFs, or videos'}
                   </p>
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                    accept="image/png,image/jpeg,image/webp,application/pdf,video/mp4"
                     style={{ display: 'none' }}
                     onChange={handleFileChange}
                     disabled={uploading}

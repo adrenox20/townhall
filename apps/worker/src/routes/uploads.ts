@@ -7,10 +7,10 @@ import { createObjectKey } from '../services/upload.service';
 import { ok } from '../utils/response';
 export const uploadRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 uploadRoutes.use('*', requireAuth());
-uploadRoutes.post('/presign', zValidator('json', z.object({ filename: z.string(), contentType: z.string(), sizeBytes: z.number().max(10_000_000) })), async (c) => {
+uploadRoutes.post('/presign', zValidator('json', z.object({ filename: z.string(), contentType: z.string(), sizeBytes: z.number().max(50_000_000) })), async (c) => {
   const body = c.req.valid('json');
   const key = createObjectKey(c.get('user').id, body.filename);
-  return ok(c, { key, uploadUrl: `/api/v1/uploads/direct/${encodeURIComponent(key)}`, maxSizeBytes: 10_000_000, allowed: ['image/png', 'image/jpeg', 'application/pdf'] });
+  return ok(c, { key, uploadUrl: `/api/v1/uploads/direct/${encodeURIComponent(key)}`, maxSizeBytes: 50_000_000, allowed: ['image/png', 'image/jpeg', 'application/pdf', 'video/mp4'] });
 });
 uploadRoutes.put('/direct/:key{.+}', async (c) => {
   await c.env.R2.put(c.req.param('key'), c.req.raw.body);

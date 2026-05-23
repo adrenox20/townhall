@@ -65,7 +65,15 @@ commentRoutes.post('/issues/:id/comments', zValidator('json', z.object({ body: z
 });
 
 commentRoutes.patch('/comments/:id', zValidator('json', z.object({ body: z.string().min(1) })), async (c) => {
-  await c.env.DB.prepare('UPDATE comments SET body = ?, updated_at = ? WHERE id = ? AND author_id = ?').bind(c.req.valid('json').body, now(), c.req.param('id'), c.get('user').id).run();
+  const user = c.get('user');
+  const canModerate = user.permissions.includes('comment:moderate');
+  if (canModerate) {
+    // Moderators can edit any comment
+    await c.env.DB.prepare('UPDATE comments SET body = ?, updated_at = ? WHERE id = ?').bind(c.req.valid('json').body, now(), c.req.param('id')).run();
+  } else {
+    // Authors can only edit their own comments
+    await c.env.DB.prepare('UPDATE comments SET body = ?, updated_at = ? WHERE id = ? AND author_id = ?').bind(c.req.valid('json').body, now(), c.req.param('id'), user.id).run();
+  }
   return ok(c, { updated: true });
 });
 
