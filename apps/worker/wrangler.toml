@@ -2,6 +2,10 @@ name = "university-grievance-api"
 main = "src/index.ts"
 compatibility_date = "2026-05-22"
 
+routes = [
+  { pattern = "live.rutownhall.live/*", zone_name = "rutownhall.live" }
+]
+
 [vars]
 FRONTEND_URL = "https://rutownhall.live"
 ALLOWED_EMAIL_DOMAIN = "rishihood.edu.in"
