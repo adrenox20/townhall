@@ -616,7 +616,7 @@ function IssueDetailContent() {
                         <div className="timeline-body">
                           <div className="timeline-text">{event.summary}</div>
                           <div className="timeline-time">
-                            {event.actor?.name ?? 'System'} · {new Date(event.created_at).toLocaleDateString()}
+                            {event.actor?.name ?? (event.type === 'issue_created' ? 'Anonymous' : 'System')} · {new Date(event.created_at).toLocaleDateString()}
                           </div>
                         </div>
                       </div>
@@ -802,9 +802,9 @@ function IssueDetailContent() {
                     <div key={solution.id} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border)' }} className="last:border-0 last:pb-0">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 12.5 }}>
                         <span className="avatar avatar--sm" style={{ background: 'var(--bg-muted)', fontSize: 9 }}>
-                          {getInitials(solution.author?.name ?? '?')}
+                          {solution.author?.name ? getInitials(solution.author.name) : '?'}
                         </span>
-                        <span style={{ fontWeight: 600 }}>{solution.author?.name ?? 'Unknown'}</span>
+                        <span style={{ fontWeight: 600 }}>{solution.author?.name ?? 'Anonymous'}</span>
                         {!!solution.is_official && <Badge variant="accent">Official</Badge>}
                       </div>
                       <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--fg)' }}>{solution.body}</p>

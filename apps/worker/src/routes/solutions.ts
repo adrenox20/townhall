@@ -23,6 +23,13 @@ solutionRoutes.get('/issues/:id/solutions', async (c) => {
   if (!issueId) return ok(c, []);
 
   const user = c.get('user');
+
+  // Fetch the parent issue's is_anonymous flag so we can strip author identity
+  const parentIssue = await c.env.DB.prepare(
+    'SELECT is_anonymous FROM issues WHERE id = ? LIMIT 1'
+  ).bind(issueId).first<{ is_anonymous: number }>();
+  const issueIsAnonymous = Boolean(parentIssue?.is_anonymous);
+
   const rows = await c.env.DB.prepare(
     `SELECT s.*,
       json_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) AS author
@@ -31,10 +38,16 @@ solutionRoutes.get('/issues/:id/solutions', async (c) => {
      WHERE s.issue_id = ? AND (? = 1 OR s.status NOT IN ('hidden', 'rejected'))`
   ).bind(issueId, user.permissions.includes('solution:review') ? 1 : 0).all<Record<string, unknown>>();
 
-  const parsed = rows.results.map(row => ({
-    ...row,
-    author: (() => { try { return JSON.parse(row.author as string); } catch { return null; } })(),
-  }));
+  const parsed = rows.results.map(row => {
+    const author = (() => { try { return JSON.parse(row.author as string); } catch { return null; } })();
+    return {
+      ...row,
+      // If the parent issue is anonymous, hide the solution author too — the submitter
+      // chose to remain anonymous and that intent should cover all their contributions.
+      author: issueIsAnonymous ? null : author,
+      author_id: issueIsAnonymous ? null : row.author_id,
+    };
+  });
   return ok(c, parsed.map((solution) => ({ ...solution, rank: solutionRank(solution as never) })).sort((a, b) => (b.rank as number) - (a.rank as number)));
 });
 

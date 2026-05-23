@@ -266,9 +266,11 @@ issueRoutes.delete('/:id/follow', async (c) => {
 issueRoutes.get('/:id/timeline', async (c) => {
   // Resolve UUID from either UUID or public_id
   const resolved = await c.env.DB.prepare(
-    'SELECT id FROM issues WHERE (id = ? OR public_id = ?) AND is_deleted = 0 LIMIT 1'
-  ).bind(c.req.param('id'), c.req.param('id')).first<{ id: string }>();
+    'SELECT id, is_anonymous FROM issues WHERE (id = ? OR public_id = ?) AND is_deleted = 0 LIMIT 1'
+  ).bind(c.req.param('id'), c.req.param('id')).first<{ id: string; is_anonymous: number }>();
   if (!resolved) return ok(c, []);
+
+  const issueIsAnonymous = Boolean(resolved.is_anonymous);
 
   const rows = await c.env.DB.prepare(
     `SELECT ae.*,
@@ -277,10 +279,17 @@ issueRoutes.get('/:id/timeline', async (c) => {
      LEFT JOIN users u ON u.id = ae.actor_id
      WHERE ae.issue_id = ? ORDER BY ae.created_at ASC`
   ).bind(resolved.id).all<Record<string, unknown>>();
-  return ok(c, rows.results.map(row => ({
-    ...row,
-    actor: (() => { try { return JSON.parse(row.actor as string); } catch { return null; } })(),
-  })));
+  return ok(c, rows.results.map(row => {
+    const actor = (() => { try { return JSON.parse(row.actor as string); } catch { return null; } })();
+    // For anonymous issues, hide the actor on the issue_created event so the
+    // submitter's identity is not revealed through the activity feed.
+    const shouldHideActor = issueIsAnonymous && row.type === 'issue_created';
+    return {
+      ...row,
+      actor: shouldHideActor ? null : actor,
+      actor_id: shouldHideActor ? null : row.actor_id,
+    };
+  }));
 });
 
 issueRoutes.post('/:id/merge', requirePermission('issue:merge'), zValidator('json', z.object({ mergedIssueId: z.string(), reason: z.string().optional(), score: z.number().optional() })), async (c) => {
