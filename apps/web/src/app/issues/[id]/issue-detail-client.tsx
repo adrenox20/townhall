@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
-import { statusLabels, allStatuses } from '@/lib/constants';
+import { statusLabels, allStatuses, API_URL } from '@/lib/constants';
 import { useIssue, useIssues, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, useVoteIssue, useMergeIssue, useDeleteIssue } from '@/hooks/use-issues';
 import type { ApiIssue } from '@/hooks/use-issues';
 import { useComments, useCreateComment, useUpdateComment } from '@/hooks/use-comments';
@@ -581,6 +581,80 @@ function IssueDetailContent() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Attachments */}
+            {(issue.attachments ?? []).length > 0 && (
+              <Card>
+                <CardHeader>
+                  <h2 className="font-semibold">Attachments ({issue.attachments!.length})</h2>
+                </CardHeader>
+                <CardContent>
+                  {/* Image grid */}
+                  {issue.attachments!.some(a => a.content_type.startsWith('image/')) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8, marginBottom: 10 }}>
+                      {issue.attachments!.filter(a => a.content_type.startsWith('image/')).map(att => {
+                        const src = `${API_URL.replace('/api/v1', '')}${att.url}`;
+                        return (
+                          <a key={att.id} href={src} target="_blank" rel="noopener noreferrer" style={{ display: 'block', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--bg-muted)' }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={src}
+                              alt={att.filename}
+                              style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }}
+                              loading="lazy"
+                            />
+                            <div style={{ padding: '5px 8px', fontSize: 11, color: 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {att.filename}
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Video players */}
+                  {issue.attachments!.filter(a => a.content_type.startsWith('video/')).map(att => {
+                    const src = `${API_URL.replace('/api/v1', '')}${att.url}`;
+                    return (
+                      <div key={att.id} style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 4 }}>{att.filename}</div>
+                        <video
+                          controls
+                          style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border)', background: '#000', maxHeight: 320 }}
+                        >
+                          <source src={src} type={att.content_type} />
+                          Your browser does not support video playback.
+                        </video>
+                      </div>
+                    );
+                  })}
+                  {/* PDF / other file links */}
+                  {issue.attachments!.filter(a => !a.content_type.startsWith('image/') && !a.content_type.startsWith('video/')).map(att => {
+                    const src = `${API_URL.replace('/api/v1', '')}${att.url}`;
+                    const kb = Math.round(att.size_bytes / 1024);
+                    return (
+                      <a
+                        key={att.id}
+                        href={src}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 12px', borderRadius: 8,
+                          border: '1px solid var(--border)', background: 'var(--bg-surface)',
+                          fontSize: 13, color: 'var(--fg)', textDecoration: 'none',
+                          marginBottom: 6,
+                        }}
+                      >
+                        <Icon name="paperclip" size={15} style={{ color: 'var(--fg-muted)', flexShrink: 0 }} />
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.filename}</span>
+                        <span style={{ fontSize: 11, color: 'var(--fg-subtle)', flexShrink: 0 }}>{kb} KB</span>
+                        <Icon name="arrow-up" size={13} style={{ color: 'var(--fg-subtle)', flexShrink: 0, transform: 'rotate(45deg)' }} />
+                      </a>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Comments */}
             <Card>

@@ -17,6 +17,7 @@ uploadRoutes.put('/direct/:key{.+}', async (c) => {
   return ok(c, { uploaded: true });
 });
 // Serve a file from R2 — authenticated, streams with correct content-type
+// Accepts Bearer token via Authorization header OR ?token= query param (needed for <img>/<video> tags)
 uploadRoutes.get('/serve/:key{.+}', async (c) => {
   const key = c.req.param('key');
   const object = await c.env.R2.get(key);

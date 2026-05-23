@@ -124,7 +124,16 @@ export function useIssue(id: string) {
 export function useCreateIssue() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { title: string; description: string; category_id?: string; department_id?: string; urgency?: string; isAnonymous?: boolean; is_anonymous?: boolean }) =>
+    mutationFn: (data: {
+      title: string;
+      description: string;
+      category_id?: string;
+      department_id?: string;
+      urgency?: string;
+      isAnonymous?: boolean;
+      is_anonymous?: boolean;
+      attachments?: Array<{ key: string; filename: string; contentType: string; sizeBytes: number }>;
+    }) =>
       api<{ id: string; public_id: string; similar: unknown[] }>('/issues', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['issues'] }); },
   });
