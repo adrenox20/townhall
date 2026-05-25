@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { statusLabels, allStatuses, API_URL } from '@/lib/constants';
-import { useIssue, useIssues, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, useVoteIssue, useMergeIssue, useDeleteIssue } from '@/hooks/use-issues';
+import { useIssue, useIssues, useUpdateIssueStatus, useUpdateIssue, useAssignIssue, useVoteIssue, useMergeIssue, useDeleteIssue, useSetIssuePriority } from '@/hooks/use-issues';
 import type { ApiIssue } from '@/hooks/use-issues';
 import { useComments, useCreateComment, useUpdateComment } from '@/hooks/use-comments';
 import { useSolutions, useUpdateSolution } from '@/hooks/use-solutions';
@@ -318,6 +318,7 @@ function IssueDetailContent() {
   const voteIssue = useVoteIssue();
   const mergeIssue = useMergeIssue();
   const deleteIssue = useDeleteIssue();
+  const setIssuePriority = useSetIssuePriority();
   const createComment = useCreateComment();
   const updateComment = useUpdateComment();
   const updateSolution = useUpdateSolution();
@@ -372,6 +373,7 @@ function IssueDetailContent() {
   const canMerge = hasPermission(user, 'issue:merge');
   const canDeleteAny = hasPermission(user, 'issue:delete_any');
   const canModerate = hasPermission(user, 'comment:moderate') || hasPermission(user, 'issue:update_any');
+  const canSetPriority = hasPermission(user, 'issue:set_priority');
   const daysOpen = Math.floor((Date.now() - new Date(issue.created_at).getTime()) / 86400000);
 
   function handleStatusChange(newStatus: string) {
@@ -923,6 +925,51 @@ function IssueDetailContent() {
                     <span style={{ fontSize: 13, textTransform: 'capitalize' }}>{issue.urgency}</span>
                   </DetailRow>
 
+                  {/* Priority — visible to all, editable by mods/portal_admin */}
+                  <DetailRow label="Priority">
+                    {canSetPriority ? (
+                      <div style={{ position: 'relative' }}>
+                        <select
+                          id={`priority-select-${issue.id}`}
+                          value={issue.priority ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value as ApiIssue['priority'];
+                            if (val) setIssuePriority.mutate({ id: issue.id, priority: val });
+                          }}
+                          disabled={setIssuePriority.isPending}
+                          style={{
+                            appearance: 'none',
+                            WebkitAppearance: 'none',
+                            background: 'var(--bg-surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 6,
+                            padding: '5px 26px 5px 9px',
+                            fontSize: 12,
+                            color: issue.priority ? 'var(--fg)' : 'var(--fg-subtle)',
+                            cursor: setIssuePriority.isPending ? 'not-allowed' : 'pointer',
+                            outline: 'none',
+                            opacity: setIssuePriority.isPending ? 0.6 : 1,
+                          }}
+                          aria-label="Set issue priority"
+                        >
+                          <option value="">Not set</option>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                          <option value="critical">Critical</option>
+                        </select>
+                        <span style={{
+                          position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)',
+                          pointerEvents: 'none', color: 'var(--fg-subtle)',
+                        }}>
+                          <Icon name="chevron-down" size={12} />
+                        </span>
+                      </div>
+                    ) : (
+                      <PriorityBadge priority={issue.priority} />
+                    )}
+                  </DetailRow>
+
                   <DetailRow label="Open for">
                     <span className="mono" style={{ fontSize: 12.5 }}>
                       {daysOpen === 0 ? 'today' : `${daysOpen}d`}
@@ -1085,6 +1132,29 @@ function IssueDetailContent() {
         </div>
       </div>
     </>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: ApiIssue['priority'] }) {
+  if (!priority) {
+    return <span style={{ fontSize: 12, color: 'var(--fg-subtle)' }}>Not set</span>;
+  }
+  const colors: Record<string, { bg: string; color: string }> = {
+    low:      { bg: 'color-mix(in oklab, #22c55e 15%, transparent)', color: '#16a34a' },
+    medium:   { bg: 'color-mix(in oklab, #f59e0b 15%, transparent)', color: '#d97706' },
+    high:     { bg: 'color-mix(in oklab, #f97316 15%, transparent)', color: '#ea580c' },
+    critical: { bg: 'color-mix(in oklab, var(--danger) 15%, transparent)', color: 'var(--danger)' },
+  };
+  const c = colors[priority] ?? { bg: 'var(--bg-muted)', color: 'var(--fg-muted)' };
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 600, textTransform: 'capitalize', letterSpacing: '0.04em',
+      padding: '3px 8px', borderRadius: 5,
+      background: c.bg, color: c.color,
+      display: 'inline-block',
+    }}>
+      {priority}
+    </span>
   );
 }
 

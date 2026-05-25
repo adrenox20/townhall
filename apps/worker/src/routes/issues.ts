@@ -6,7 +6,7 @@ import { requireAuth, requirePermission } from '../middleware/auth';
 import { audit } from '../middleware/audit';
 import { canTransition } from '../services/workflow.service';
 import { findSimilarIssues } from '../services/duplicate.service';
-import { notify } from '../services/notification.service';
+import { notify, notifyModeratorsAndAdmins } from '../services/notification.service';
 import { addHours, now } from '../utils/dates';
 import { id, publicIssueId } from '../utils/ids';
 import { created, fail, ok } from '../utils/response';
@@ -127,6 +127,15 @@ issueRoutes.post('/', requirePermission('issue:create'), zValidator('json', writ
       'INSERT INTO attachments (id, issue_id, uploader_id, r2_key, filename, content_type, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(id('att'), issueId, user.id, att.key, att.filename, att.contentType, att.sizeBytes, now()).run();
   }
+
+  // Notify all moderators and portal admins to review and set priority
+  const issueTitle = body.title.length > 60 ? body.title.slice(0, 60) + '…' : body.title;
+  await notifyModeratorsAndAdmins(
+    c,
+    'New issue needs priority review',
+    `"${issueTitle}" (${publicId}) was just submitted. Please review and set its priority.`,
+    issueId,
+  );
 
   return created(c, { id: issueId, public_id: publicId, similar });
 });
@@ -347,3 +356,44 @@ issueRoutes.post('/:id/archive', requirePermission('issue:archive'), async (c) =
   await audit(c, 'issue.archive', 'issue', c.req.param('id'));
   return ok(c, { archived: true });
 });
+
+/* ── Priority ────────────────────────────────────────────────────────────── */
+const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
+type Priority = typeof VALID_PRIORITIES[number];
+
+issueRoutes.patch(
+  '/:id/priority',
+  requirePermission('issue:set_priority'),
+  zValidator('json', z.object({ priority: z.enum(VALID_PRIORITIES) })),
+  async (c) => {
+    const body = c.req.valid('json');
+    const issueId = c.req.param('id');
+    const actor = c.get('user');
+
+    const issue = await c.env.DB.prepare('SELECT id, author_id, priority FROM issues WHERE id = ? AND is_deleted = 0')
+      .bind(issueId).first<{ id: string; author_id: string; priority: string | null }>();
+    if (!issue) return fail(c, 'NOT_FOUND', 'Issue not found', 404);
+
+    const prevPriority = issue.priority ?? 'unset';
+    await c.env.DB.prepare('UPDATE issues SET priority = ?, updated_at = ? WHERE id = ?')
+      .bind(body.priority, now(), issueId).run();
+
+    await c.env.DB.prepare(
+      'INSERT INTO activity_events (id, issue_id, actor_id, type, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      id('act'), issueId, actor.id, 'priority_set',
+      `Priority set to ${body.priority} (was ${prevPriority})`,
+      now(),
+    ).run();
+
+    await audit(c, 'issue.set_priority', 'issue', issueId, { from: prevPriority, to: body.priority });
+
+    // Notify the issue author about the priority being set
+    if (issue.author_id !== actor.id) {
+      await notify(c, issue.author_id, 'Issue priority set', `Your issue has been assigned priority: ${body.priority}`, issueId);
+    }
+
+    return ok(c, { priority: body.priority });
+  },
+);
+

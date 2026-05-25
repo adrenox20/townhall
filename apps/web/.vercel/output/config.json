@@ -1,0 +1,194 @@
+{
+  "version": 3,
+  "routes": [
+    {
+      "src": "/_next/__private/trace",
+      "dest": "/404",
+      "status": 404,
+      "continue": true
+    },
+    {
+      "src": "/404/?",
+      "status": 404,
+      "continue": true
+    },
+    {
+      "src": "^(?:/((?!\\.well-known(?:/.*)?)(?:[^/]+/)*[^/]+\\.\\w+))/$",
+      "headers": {
+        "Location": "/$1"
+      },
+      "status": 308,
+      "missing": [
+        {
+          "type": "header",
+          "key": "x-nextjs-data"
+        }
+      ]
+    },
+    {
+      "src": "^(?:/((?!\\.well-known(?:/.*)?)(?:[^/]+/)*[^/\\.]+))$",
+      "headers": {
+        "Location": "/$1/"
+      },
+      "status": 308
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/_next/data/(.*)",
+      "dest": "/_next/data/$1",
+      "check": true
+    },
+    {
+      "src": "/_next/data/(.*)",
+      "status": 404
+    },
+    {
+      "handle": "resource"
+    },
+    {
+      "src": "/.*",
+      "status": 404
+    },
+    {
+      "handle": "miss"
+    },
+    {
+      "src": "/_next/static/(?:[^/]+/pages|pages|chunks|runtime|css|image|media)/.+",
+      "status": 404,
+      "check": true,
+      "dest": "$0"
+    },
+    {
+      "handle": "hit"
+    },
+    {
+      "src": "/_next/static/(?:[^/]+/pages|pages|chunks|runtime|css|image|media|h5vwbV2djwme7jQq1uAWX)/.+",
+      "headers": {
+        "cache-control": "public,max-age=31536000,immutable"
+      },
+      "continue": true,
+      "important": true
+    },
+    {
+      "handle": "error"
+    },
+    {
+      "status": 404,
+      "src": ".*",
+      "dest": "/404"
+    }
+  ],
+  "images": {
+    "domains": [],
+    "sizes": [
+      640,
+      750,
+      828,
+      1080,
+      1200,
+      1920,
+      2048,
+      3840,
+      16,
+      32,
+      48,
+      64,
+      96,
+      128,
+      256,
+      384
+    ],
+    "remotePatterns": [],
+    "minimumCacheTTL": 60,
+    "formats": [
+      "image/webp"
+    ],
+    "dangerouslyAllowSVG": false,
+    "contentSecurityPolicy": "script-src 'none'; frame-src 'none'; sandbox;",
+    "contentDispositionType": "attachment"
+  },
+  "overrides": {
+    "404.html": {
+      "path": "404",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "404/index.html": {
+      "path": "404/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "admin/analytics/index.html": {
+      "path": "admin/analytics/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "admin/index.html": {
+      "path": "admin/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "admin/issues/index.html": {
+      "path": "admin/issues/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "admin/kanban/index.html": {
+      "path": "admin/kanban/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "admin/settings/index.html": {
+      "path": "admin/settings/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "dashboard/index.html": {
+      "path": "dashboard/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "index.html": {
+      "path": "index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "issues/_/index.html": {
+      "path": "issues/_/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "issues/index.html": {
+      "path": "issues/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "issues/new/index.html": {
+      "path": "issues/new/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "login/index.html": {
+      "path": "login/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "new-issue/index.html": {
+      "path": "new-issue/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "notifications/index.html": {
+      "path": "notifications/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "portal/audit/index.html": {
+      "path": "portal/audit/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "portal/index.html": {
+      "path": "portal/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "portal/moderation/index.html": {
+      "path": "portal/moderation/index",
+      "contentType": "text/html; charset=utf-8"
+    },
+    "portal/users/index.html": {
+      "path": "portal/users/index",
+      "contentType": "text/html; charset=utf-8"
+    }
+  },
+  "framework": {
+    "version": "15.5.18"
+  },
+  "crons": []
+}

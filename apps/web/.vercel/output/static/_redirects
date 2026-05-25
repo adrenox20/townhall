@@ -1,0 +1,4 @@
+/issues/new  /issues/new/  301
+/issues/new/  /new-issue/index.html  200
+/issues/:id  /issues/_/index.html  200
+/issues/:id/  /issues/_/index.html  200
