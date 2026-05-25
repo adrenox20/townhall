@@ -1,0 +1,15 @@
+# Lines starting with '#' are comments.
+# Each line is a file pattern followed by one or more owners.
+
+# Global owners
+*       @adrenox20
+
+# Specific owners for CI/CD and GitHub configuration
+/.github/workflows/   @adrenox20
+/.github/             @adrenox20
+
+# Backend / API
+/apps/worker/         @adrenox20
+
+# Frontend
+/apps/web/            @adrenox20
