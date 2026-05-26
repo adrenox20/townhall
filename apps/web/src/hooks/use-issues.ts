@@ -43,6 +43,7 @@ export interface ApiIssue {
   assignee_id: string | null;
   status: string;
   urgency: string;
+  priority: 'low' | 'medium' | 'high' | 'critical' | null;
   priority_score: number;
   visibility: string;
   is_anonymous: boolean;
@@ -241,5 +242,24 @@ export function useVoteIssue() {
         queryClient.setQueryData(['issues', id], context.previous);
       }
     },
+  });
+}
+
+export function useSetIssuePriority() {
+  const queryClient = useQueryClient();
+  const { pushToast } = useApp();
+  return useMutation({
+    mutationFn: ({ id, priority }: { id: string; priority: 'low' | 'medium' | 'high' | 'critical' }) =>
+      api<{ priority: string }>(`/issues/${id}/priority`, { method: 'PATCH', body: JSON.stringify({ priority }) }),
+    onSuccess: (data, { id }) => {
+      // Optimistically update the cached issue
+      queryClient.setQueryData<ApiIssue>(['issues', id], (old) =>
+        old ? { ...old, priority: data.priority as ApiIssue['priority'] } : old
+      );
+      queryClient.invalidateQueries({ queryKey: ['issues', id] });
+      queryClient.invalidateQueries({ queryKey: ['timeline'] });
+      pushToast('Priority updated', 'check');
+    },
+    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to set priority', 'alert'); },
   });
 }

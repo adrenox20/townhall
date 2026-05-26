@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS issues (
   assignee_id TEXT,
   status TEXT NOT NULL,
   urgency TEXT NOT NULL,
+  priority TEXT DEFAULT NULL,
   priority_score REAL DEFAULT 0,
   visibility TEXT DEFAULT 'public',
   is_anonymous INTEGER DEFAULT 0,

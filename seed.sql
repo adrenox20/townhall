@@ -26,7 +26,8 @@ INSERT OR IGNORE INTO permissions (id, name, description) VALUES
   ('perm_rbac_manage', 'rbac:manage', 'Manage RBAC'),
   ('perm_audit_read', 'audit:read', 'Read audit logs'),
   ('perm_user_suspend', 'user:suspend', 'Suspend users'),
-  ('perm_admin_manage', 'admin:manage', 'Manage admins');
+  ('perm_admin_manage', 'admin:manage', 'Manage admins'),
+  ('perm_issue_set_priority', 'issue:set_priority', 'Set issue priority (moderator/portal_admin only)');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 'role_student', id FROM permissions WHERE name IN (
@@ -36,7 +37,7 @@ SELECT 'role_student', id FROM permissions WHERE name IN (
 INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 'role_moderator', id FROM permissions WHERE name IN (
   'issue:create','issue:read_public','issue:update_own','issue:delete_own_pre_review',
-  'issue:delete_any','issue:merge','comment:create','comment:moderate','solution:create'
+  'issue:delete_any','issue:merge','issue:set_priority','comment:create','comment:moderate','solution:create'
 );
 INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 'role_institution_admin', id FROM permissions WHERE name IN (
