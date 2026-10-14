@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { captureEvent } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { useApp } from '@/context/app-context';
 
@@ -30,8 +31,13 @@ export function useCreateComment() {
   return useMutation({
     mutationFn: ({ issueId, body, is_internal }: { issueId: string; body: string; is_internal?: boolean }) =>
       api<ApiComment>(`/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify({ body, is_internal }) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['comments'] }); },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to post comment', 'alert'); },
+    onSuccess: (_, { issueId, is_internal }) => {
+      captureEvent('comment_posted', { issue_id: issueId, is_internal: Boolean(is_internal) });
+      queryClient.invalidateQueries({ queryKey: ['comments'] });
+    },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to post comment', 'alert');
+    },
   });
 }
 
@@ -41,7 +47,11 @@ export function useUpdateComment() {
   return useMutation({
     mutationFn: ({ commentId, body }: { commentId: string; body: string }) =>
       api<{ updated: boolean }>(`/comments/${commentId}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['comments'] }); },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update comment', 'alert'); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comments'] });
+    },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to update comment', 'alert');
+    },
   });
 }

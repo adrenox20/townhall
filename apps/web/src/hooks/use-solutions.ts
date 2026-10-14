@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { captureEvent } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { useApp } from '@/context/app-context';
 
@@ -30,8 +31,13 @@ export function useCreateSolution() {
   return useMutation({
     mutationFn: ({ issueId, body }: { issueId: string; body: string }) =>
       api<ApiSolution>(`/issues/${issueId}/solutions`, { method: 'POST', body: JSON.stringify({ body }) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['solutions'] }); },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to submit solution', 'alert'); },
+    onSuccess: (_, { issueId }) => {
+      captureEvent('solution_proposed', { issue_id: issueId });
+      queryClient.invalidateQueries({ queryKey: ['solutions'] });
+    },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to submit solution', 'alert');
+    },
   });
 }
 
@@ -41,8 +47,12 @@ export function useUpdateSolution() {
   return useMutation({
     mutationFn: ({ solutionId, body }: { solutionId: string; body: string }) =>
       api<{ updated: boolean }>(`/solutions/${solutionId}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['solutions'] }); },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update solution', 'alert'); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solutions'] });
+    },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to update solution', 'alert');
+    },
   });
 }
 
@@ -51,8 +61,15 @@ export function useSelectOfficialSolution() {
   const { pushToast } = useApp();
   return useMutation({
     mutationFn: ({ issueId, solutionId }: { issueId: string; solutionId: string }) =>
-      api<void>(`/issues/${issueId}/official-solution`, { method: 'POST', body: JSON.stringify({ solution_id: solutionId }) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['solutions'] }); },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update official solution', 'alert'); },
+      api<void>(`/issues/${issueId}/official-solution`, {
+        method: 'POST',
+        body: JSON.stringify({ solution_id: solutionId }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solutions'] });
+    },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to update official solution', 'alert');
+    },
   });
 }

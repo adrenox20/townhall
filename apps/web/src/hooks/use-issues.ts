@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { captureEvent } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { useApp } from '@/context/app-context';
 
@@ -134,8 +135,22 @@ export function useCreateIssue() {
       is_anonymous?: boolean;
       attachments?: Array<{ key: string; filename: string; contentType: string; sizeBytes: number }>;
     }) =>
-      api<{ id: string; public_id: string; similar: unknown[] }>('/issues', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['issues'] }); },
+      api<{ id: string; public_id: string; similar: unknown[] }>('/issues', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (result, data) => {
+      captureEvent('issue_created', {
+        issue_id: result.id,
+        category_id: data.category_id,
+        department_id: data.department_id,
+        urgency: data.urgency,
+        is_anonymous: Boolean(data.isAnonymous ?? data.is_anonymous),
+        attachment_count: data.attachments?.length ?? 0,
+        similar_count: result.similar?.length ?? 0,
+      });
+      queryClient.invalidateQueries({ queryKey: ['issues'] });
+    },
   });
 }
 
@@ -143,13 +158,30 @@ export function useUpdateIssue() {
   const queryClient = useQueryClient();
   const { pushToast } = useApp();
   return useMutation({
-    mutationFn: ({ id, title, description, urgency, category_id }: { id: string; title?: string; description?: string; urgency?: string; category_id?: string }) =>
-      api<{ updated: boolean }>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify({ title, description, urgency, category_id }) }),
+    mutationFn: ({
+      id,
+      title,
+      description,
+      urgency,
+      category_id,
+    }: {
+      id: string;
+      title?: string;
+      description?: string;
+      urgency?: string;
+      category_id?: string;
+    }) =>
+      api<{ updated: boolean }>(`/issues/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title, description, urgency, category_id }),
+      }),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['issues', id] });
     },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update issue', 'alert'); },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to update issue', 'alert');
+    },
   });
 }
 
@@ -159,12 +191,15 @@ export function useUpdateIssueStatus() {
   return useMutation({
     mutationFn: ({ id, status, note }: { id: string; status: string; note?: string }) =>
       api<ApiIssue>(`/issues/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, note }) }),
-    onSuccess: (_, { id }) => {
+    onSuccess: (_, { id, status, note }) => {
+      captureEvent('issue_status_changed', { issue_id: id, status, has_note: Boolean(note) });
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['issues', id] });
       queryClient.invalidateQueries({ queryKey: ['timeline'] });
     },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to update status', 'alert'); },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to update status', 'alert');
+    },
   });
 }
 
@@ -175,11 +210,14 @@ export function useAssignIssue() {
     mutationFn: ({ id, assignee_id }: { id: string; assignee_id: string }) =>
       api<ApiIssue>(`/issues/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ assignee_id }) }),
     onSuccess: (_, { id }) => {
+      captureEvent('issue_assigned', { issue_id: id });
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       queryClient.invalidateQueries({ queryKey: ['issues', id] });
       queryClient.invalidateQueries({ queryKey: ['timeline'] });
     },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to assign issue', 'alert'); },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to assign issue', 'alert');
+    },
   });
 }
 
@@ -188,12 +226,17 @@ export function useMergeIssue() {
   const { pushToast } = useApp();
   return useMutation({
     mutationFn: ({ id, mergedIssueId, reason }: { id: string; mergedIssueId: string; reason?: string }) =>
-      api<{ merged: boolean }>(`/issues/${id}/merge`, { method: 'POST', body: JSON.stringify({ mergedIssueId, reason }) }),
+      api<{ merged: boolean }>(`/issues/${id}/merge`, {
+        method: 'POST',
+        body: JSON.stringify({ mergedIssueId, reason }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       pushToast('Issues merged successfully', 'check');
     },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to merge issues', 'alert'); },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to merge issues', 'alert');
+    },
   });
 }
 
@@ -207,15 +250,16 @@ export function useDeleteIssue() {
       queryClient.invalidateQueries({ queryKey: ['issues'] });
       pushToast('Issue deleted', 'check');
     },
-    onError: (err) => { pushToast(err instanceof Error ? err.message : 'Failed to delete issue', 'alert'); },
+    onError: (err) => {
+      pushToast(err instanceof Error ? err.message : 'Failed to delete issue', 'alert');
+    },
   });
 }
 
 export function useVoteIssue() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id }: { id: string }) =>
-      api<{ votes: number }>(`/issues/${id}/vote`, { method: 'POST' }),
+    mutationFn: ({ id }: { id: string }) => api<{ votes: number }>(`/issues/${id}/vote`, { method: 'POST' }),
     onMutate: async ({ id }) => {
       // Optimistic update — increment vote count immediately
       await queryClient.cancelQueries({ queryKey: ['issues', id] });
@@ -229,10 +273,9 @@ export function useVoteIssue() {
       return { previous };
     },
     onSuccess: (data, { id }) => {
+      captureEvent('issue_voted', { issue_id: id, votes: data.votes });
       // Sync with real server count
-      queryClient.setQueryData<ApiIssue>(['issues', id], (old) =>
-        old ? { ...old, votes: data.votes } : old
-      );
+      queryClient.setQueryData<ApiIssue>(['issues', id], (old) => (old ? { ...old, votes: data.votes } : old));
       queryClient.invalidateQueries({ queryKey: ['issues'] });
     },
     onError: (_err, { id }, context) => {
