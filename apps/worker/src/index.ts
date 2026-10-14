@@ -24,18 +24,22 @@ import { notificationConsumer } from './queues/notification-consumer';
 import { requestContext } from './middleware/errors';
 import { securityHeaders } from './middleware/security';
 import { ok } from './utils/response';
+import { POSTHOG_PROXY_PREFIX, proxyPostHog } from './posthog-proxy';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.use('*', requestContext);
 app.use('*', logger());
 app.use('*', securityHeaders);
-app.use('*', cors({
-  origin: (origin, c) => origin || c.env.FRONTEND_URL,
-  allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
-  credentials: true
-}));
+app.use(
+  '*',
+  cors({
+    origin: (origin, c) => origin || c.env.FRONTEND_URL,
+    allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
+    credentials: true,
+  }),
+);
 
 app.get('/api/health', (c) => ok(c, { ok: true, service: 'university-grievance-api' }));
 app.get('/api/v1/health', (c) => ok(c, { ok: true, service: 'university-grievance-api' }));
@@ -51,7 +55,9 @@ app.route('/api/v1/admin', adminRoutes);
 app.route('/api/v1/portal', portalRoutes);
 app.route('/api/v1/notifications', notificationRoutes);
 app.route('/api/v1/uploads', uploadRoutes);
-app.get('/api/v1/attachments/:id', async (c) => ok(c, await c.env.DB.prepare('SELECT * FROM attachments WHERE id = ?').bind(c.req.param('id')).first()));
+app.get('/api/v1/attachments/:id', async (c) =>
+  ok(c, await c.env.DB.prepare('SELECT * FROM attachments WHERE id = ?').bind(c.req.param('id')).first()),
+);
 app.route('/api/v1/analytics', analyticsRoutes);
 app.route('/api/v1/moderation', moderationRoutes);
 app.route('/api/v1/saved-filters', savedFilterRoutes);
@@ -60,11 +66,20 @@ app.route('/api/v1', openApiRoutes);
 app.notFound((c) => c.json({ error: { code: 'NOT_FOUND', message: 'Not found', details: {} } }, 404));
 app.onError((error: Error & { code?: string; status?: number }, c) => {
   console.error(error);
-  return c.json({ error: { code: error.code || 'INTERNAL_ERROR', message: error.message || 'Internal server error', details: {} } }, (error.status || 500) as never);
+  return c.json(
+    { error: { code: error.code || 'INTERNAL_ERROR', message: error.message || 'Internal server error', details: {} } },
+    (error.status || 500) as never,
+  );
 });
 
 export { IssueRoom, NotificationHub };
 export default {
-  fetch: app.fetch,
-  queue: notificationConsumer
+  fetch: (request: Request, env: Env, ctx: ExecutionContext) => {
+    const { pathname } = new URL(request.url);
+    if (pathname === POSTHOG_PROXY_PREFIX || pathname.startsWith(`${POSTHOG_PROXY_PREFIX}/`)) {
+      return proxyPostHog(request);
+    }
+    return app.fetch(request, env, ctx);
+  },
+  queue: notificationConsumer,
 };

@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { useRouter, usePathname } from 'next/navigation';
 import type { SessionUser } from './permissions';
 import { api } from './api';
+import { captureEvent, identifyUser, resetUser } from './analytics';
 
 interface AuthContextValue {
   user: SessionUser | null;
@@ -18,7 +19,9 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
-  loginWithGoogle: async () => { throw new Error('AuthProvider missing'); },
+  loginWithGoogle: async () => {
+    throw new Error('AuthProvider missing');
+  },
   logout: async () => {},
   refresh: async () => {},
 });
@@ -36,7 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function restoreSession() {
       try {
         const me = await api<SessionUser>('/auth/me');
-        if (!cancelled) setUser(me);
+        if (!cancelled) {
+          setUser(me);
+          identifyUser(me);
+        }
       } catch {
         if (!cancelled) {
           setUser(null);
@@ -47,7 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     restoreSession();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -68,6 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const me = await api<SessionUser>('/auth/me');
     setUser(me);
+    identifyUser(me);
+    captureEvent('user_logged_in', { method: 'google', roles: me.roles.join(',') });
     return me;
   }, []);
 
@@ -77,6 +87,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // clear local state even if API fails
     }
+    captureEvent('user_logged_out');
+    resetUser();
     localStorage.removeItem('auth_token');
     setUser(null);
     router.push('/login');
